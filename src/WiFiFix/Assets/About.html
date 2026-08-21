@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XAOCEN ReWiFi - 无线重连工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      --brand: #FFBD4A;
+      --brand-hover: #F6A91C;
+      --brand-pressed: #D98A00;
+      --cyan: #44D9E6;
+      --blue: #2EB3FF;
+      --mist: #AFCFEE;
+      --text-primary: #17212B;
+      --text-body: #354454;
+      --text-secondary: #667788;
+      --border: #DFE7EE;
+      --divider: #EDF1F5;
+      --bg-page: #F7F9FB;
+      --bg-card: #FFFFFF;
+      --gradient-warm: linear-gradient(135deg, #FFBD4A, #F6A91C);
+      --gradient-tech: linear-gradient(135deg, #44D9E6, #2EB3FF);
+    }
+    body { margin: 0; color: var(--text-body); background: var(--bg-page); line-height: 1.75; }
+    .page { max-width: 1000px; margin: 0 auto; padding: 28px 34px 56px; }
+    .hero { overflow: hidden; border: 1px solid var(--border); border-radius: 18px; background: var(--bg-card); box-shadow: 0 8px 28px rgba(23,33,43,.08); }
+    .hero img { display: block; width: 100%; height: auto; }
+    .hero-content { padding: 24px 30px 28px; }
+    h1 { margin: 0; color: var(--text-primary); font-size: 30px; line-height: 1.25; }
+    h2 { margin: 32px 0 12px; color: var(--brand-pressed); font-size: 22px; }
+    h3 { margin: 22px 0 8px; color: var(--brand-pressed); font-size: 18px; }
+    .subtitle { margin: 4px 0 14px; color: var(--brand-pressed); font-size: 19px; }
+    .lead { color: var(--text-primary); font-size: 17px; }
+    .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .card { padding: 16px 18px; border: 1px solid #D9F8FA; border-radius: 12px; background: var(--bg-card); }
+    .card strong { display: block; margin-bottom: 4px; color: #1497A3; }
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+    .step { position: relative; padding: 15px 10px; border: 1px solid #A9EEF3; border-radius: 10px; color: #11717A; text-align: center; background: linear-gradient(135deg, #F0FCFD, #D9F8FA); }
+    .step:not(:last-child)::after { content: "→"; position: absolute; right: -15px; top: 12px; z-index: 1; color: var(--cyan); font-size: 24px; font-weight: 700; }
+    pre { overflow-x: auto; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-body); background: var(--bg-card); }
+    code { font-family: Consolas, "Courier New", monospace; }
+    a { color: #087BC0; }
+    a:hover { color: #20C4D3; }
+    footer { margin-top: 38px; padding-top: 18px; border-top: 1px solid var(--divider); color: var(--text-secondary); font-size: 14px; }
+    @media (max-width: 700px) { .page { padding: 16px; } .card-grid, .flow { grid-template-columns: 1fr; } .step:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -22px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <img src="xaocen-rewifi.png" alt="XAOCEN ReWiFi 无线重连工具">
+      <div class="hero-content">
+        <h1>XAOCEN ReWiFi</h1>
+        <div class="subtitle">无线重连工具 · Version v1.4</div>
+        <p class="lead">用于持续监测 Windows 当前 Wi‑Fi 状态，并在网络异常时自动重启 Wi‑Fi 与重新连接。</p>
+        <p>专注于稳定、安静的后台运行，让重要的网络任务保持顺畅进行。</p>
+        <p>XAOCEN ReWiFi 是一个轻量的 Windows Wi‑Fi 自动恢复托盘工具。它持续读取 Windows 自己维护的网络状态，在指定 Wi‑Fi 出现持续异常时，自动关闭并重新开启 Wi‑Fi 网卡，然后连接 Windows 已保存的 Wi‑Fi Profile。</p>
+        <p>程序不保存 Wi‑Fi 密码，不管理代理软件，不连接自有服务器，也不提供测速、账号或云端功能。</p>
+      </div>
+    </section>
+
+    <h2>功能概览</h2>
+    <p>程序启动后隐藏主窗口，仅在 Windows 托盘运行：</p>
+    <div class="flow"><div class="step">监测指定 Wi‑Fi</div><div class="step">发现网络异常</div><div class="step">重启 Wi‑Fi 网卡</div><div class="step">重新连接网络</div></div>
+    <p>恢复完成后进入 30 秒冷却并继续监听。设置窗口使用 ReWiFi 图标和流程说明，帮助用户直观看到程序的工作方式。</p>
+    <div class="card-grid"><div class="card"><strong>后台运行</strong>启动后常驻 Windows 托盘，不需要一直打开窗口。</div><div class="card"><strong>自动恢复</strong>异常持续设定时间后，自动关闭、开启并重新连接 Wi‑Fi。</div><div class="card"><strong>本地优先</strong>不保存 Wi‑Fi 密码，不管理代理软件，也不连接自有服务器。</div></div>
+
+    <h2>环境</h2>
+    <ul><li>Windows 10 / Windows 11</li><li>.NET 10 SDK</li><li>WinForms</li></ul>
+    <p>程序需要管理员权限，因为恢复流程需要启用或禁用 Wi‑Fi 网卡。开机启动使用 Windows 任务计划程序，并以最高权限运行。</p>
+
+    <h2>编译</h2>
+    <pre><code>dotnet build .\XAOCEN-WiFiFix.sln -c Release
+
+dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\publish</code></pre>
+    <p>输出文件名为 <code>XAOCEN.ReWiFi.exe</code>。独立版本约 56 MB，目标电脑不需要另外安装 .NET 10。</p>
+
+    <h2>使用</h2>
+    <ol><li>先通过 Windows Wi‑Fi 菜单连接一次目标网络，让 Windows 保存该 Wi‑Fi Profile。</li><li>以管理员身份运行 <code>XAOCEN.ReWiFi.exe</code>。</li><li>右键托盘图标打开“设置”。</li><li>点击“自动识别当前连接”，程序会自动填入当前 SSID 和 Wi‑Fi 网卡名称。</li><li>保存设置即可。默认异常等待 5 秒、恢复冷却 30 秒、自动恢复和开机启动均开启。</li></ol>
+
+    <h2>网络判断</h2>
+    <p>程序每 2 秒读取指定无线网卡的本地 Windows 状态，正常时不主动访问互联网。Windows 状态异常持续设置的秒数后，程序才会并行执行两个轻量 HTTPS 探测：</p>
+    <ul><li>Google 与百度都可达：认为外网正常，不重启 Wi‑Fi。</li><li>一个可达、一个不可达：可能是代理规则或代理链路问题，不重启 Wi‑Fi。</li><li>两个都不可达：认为实体 Wi‑Fi 可能异常，执行一次 Wi‑Fi 恢复。</li><li>Wi‑Fi 物理断开、SSID 消失或网卡禁用：直接进入恢复流程。</li></ul>
+    <p>程序不会操作代理软件。探测只读取响应状态，不保存网页内容、Cookie、账号、Token 或密码。</p>
+
+    <h2>日志与配置</h2>
+    <p>托盘菜单提供“查看运行日志”。</p>
+    <p>日志文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\runtime.log</code></pre>
+    <p>配置文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\config.json</code></pre>
+    <p>本地产品介绍页面：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\XAOCEN-ReWiFi-介绍.html</code></pre>
+
+    <h2>限制</h2>
+    <p>目标 Wi‑Fi 必须已经由当前 Windows 用户保存过 Profile。Google 或百度可能受到代理规则、域名策略或服务故障影响，因此“一成功一失败”只记录为部分可达，不会据此重启 Wi‑Fi。</p>
+
+    <h2>更新日志</h2>
+    <h3>v1.4 · 2026-08-22</h3>
+    <ul><li>全面应用 XAOCEN 品牌色彩规范。</li><li>使用新版 <code>xaocen-rewifi.png</code> 作为本地产品介绍页主视觉。</li><li>统一橙黄、青靛、天蓝、青灰和中性色的使用职责。</li><li>更新设置窗口的背景、按钮、链接、文字和容器颜色。</li><li>更新本地 HTML 产品介绍页面的配色、主视觉和完整使用说明。</li><li>补充日志目录、配置目录、本地介绍页目录、编译和使用说明。</li><li>固定跨版本单实例互斥名称，避免旧版和新版同时操作 Wi‑Fi 网卡。</li><li>增加 GitHub 安全排除规则，避免本地配置、运行日志和构建产物进入仓库。</li><li>保留 v1.3 至 v0.1 的历史更新记录，并补充 v1.4 当前版本说明。</li></ul>
+
+    <h3>v1.3 · 2026-08-21</h3>
+    <ul><li>应用名称更新为 <code>XAOCEN ReWiFi</code>。</li><li>中文名称确定为“无线重连”。</li><li>统一应用、程序集、文件属性、托盘菜单、日志和任务计划程序版本为 <code>1.3</code>。</li><li>替换 EXE、快捷方式和托盘使用的 ReWiFi 圆角图标。</li><li>在设置窗口加入图标和自动恢复流程说明，让无主窗口的托盘程序也能直观展示工作方式。</li><li>新增独立产品介绍文案，统一应用介绍、版本和开发者信息。</li><li>设置窗口功能展示区改为完整产品介绍，并加入 GitHub 项目主页链接。</li><li>开机任务更名为 <code>XAOCEN ReWiFi</code>，并自动清理旧的 <code>XAOCEN WiFiFix</code> 任务。</li><li>自动迁移旧版本地配置，保留已设置的 SSID、网卡、等待时间和恢复选项。</li><li>保留实体 Wi‑Fi 网卡判断、Google/百度 HTTPS 辅助判断、恢复冷却和运行日志功能。</li></ul>
+
+    <h3>v1.2 · 2026-08-15</h3>
+    <ul><li>完善运行日志、开机任务、配置保存和网络异常恢复流程；加入连通性探测相关功能。</li><li>开机任务自动创建和更新。</li><li>从旧版配置目录自动迁移配置。</li><li>解决旧版任务仍指向历史 EXE 的问题。</li><li>修复日志乱码问题。</li></ul>
+
+    <h3>v1.1 · 2026-08-12</h3>
+    <ul><li>Wi‑Fi 断开或无 Internet 时自动恢复。</li><li>Wi‑Fi 已连接但 Google、百度均不可达时自动重连。</li><li>一个网站可达、另一个不可达时，不立即重启，避免误伤代理链路。</li><li>运行日志和托盘“查看运行日志”。</li><li>自动识别当前 SSID 和 Wi‑Fi 网卡。</li><li>单实例运行，防止多个后台程序同时操作网卡。</li></ul>
+
+    <h3>v1.0 · 2026-08-11</h3>
+    <ul><li>完善运行日志、开机任务、配置保存和网络异常恢复流程；加入连通性探测相关功能。</li><li>诊断日志版本，增加启动路径、PID、任务路径和运行状态记录。</li><li>日志编码和乱码相关修正版。</li><li>加入 Google、百度连通性辅助判断。</li><li>针对网络探测、恢复流程、开机任务和稳定性进行修正。</li></ul>
+
+    <h3>v0.1 · 2026-08-10</h3>
+    <ul><li>基础功能：托盘常驻、单实例、配置文件、管理员权限、Wi‑Fi 自动关闭/开启/重连、异常等待、恢复冷却、开机启动。</li></ul>
+
+    <h2>项目与更新</h2>
+    <p><a href="https://github.com/siycaoxgh/xaocen-rewifi">打开 GitHub 项目主页和更新记录</a></p>
+    <footer><div>开发：XAOCEN STUDIO</div><div>© 2026 XAOCEN · All Rights Reserved.</div></footer>
+  </main>
+</body>
+</html>

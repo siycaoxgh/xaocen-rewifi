@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>XAOCEN.ReWiFi</AssemblyName>
+    <Product>XAOCEN ReWiFi</Product>
+    <AssemblyTitle>XAOCEN ReWiFi</AssemblyTitle>
+    <Title>XAOCEN ReWiFi</Title>
+    <Company>XAOCEN STUDIO</Company>
+    <RootNamespace>XAOCEN.ReWiFi</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>AnyCPU</Platforms>
+    <Version>1.4</Version>
+    <InformationalVersion>1.4</InformationalVersion>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
+    <FileVersion>1.4.0.0</FileVersion>
+    <ApplicationIcon>Assets\xaocen-rewifi_rounded.ico</ApplicationIcon>
+    <DebugType>none</DebugType>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\xaocen-rewifi_rounded.png" />
+    <EmbeddedResource Include="Assets\About.html" />
+    <EmbeddedResource Include="Assets\xaocen-rewifi.png" />
+  </ItemGroup>
+</Project>

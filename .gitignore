@@ -1,0 +1,31 @@
+# Visual Studio / .NET local files
+.vs/
+.idea/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+
+# Local runtime data (never commit a user's network settings or logs)
+runtime.log
+config.json
+*.log
+
+# Signing keys and certificates
+*.pfx
+*.p12
+*.cer
+*.crt
+
+# Local publish/output folders
+publish/
+*-publish/
+archive/
+
+# Superseded design exports kept outside the current source set
+assets/XAOCEN-ReWiFi-banner*.png
+assets/图层 2.png
+assets/Codex 图像 *.png
+src/WiFiFix/Assets/wifi-icon*.png
+src/WiFiFix/Assets/wifi-icon.ico
+src/WiFiFix/Assets/XAOCEN-ReWiFi-banner*.png
