@@ -10,12 +10,26 @@ public sealed class ConnectivityProbe
         new Uri("https://www.baidu.com/")
     ];
 
-    private readonly Lazy<HttpClient> _httpClient = new(CreateHttpClient);
+    private readonly IReadOnlyList<Uri> _probeUris;
+    private readonly Lazy<HttpClient> _httpClient;
+
+    public ConnectivityProbe() : this(CreateDirectHandler(), ProbeUris)
+    {
+    }
+
+    internal ConnectivityProbe(HttpMessageHandler handler, IReadOnlyList<Uri> probeUris)
+    {
+        _probeUris = probeUris;
+        _httpClient = new Lazy<HttpClient>(() => new HttpClient(handler, disposeHandler: true)
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        });
+    }
 
     public async Task<ConnectivityProbeResult> CheckAsync(int timeoutSeconds, CancellationToken cancellationToken)
     {
         var timeout = TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 1, 15));
-        var checks = ProbeUris.Select(uri => CheckOneAsync(uri, timeout, cancellationToken));
+        var checks = _probeUris.Select(uri => CheckOneAsync(uri, timeout, cancellationToken));
         var results = await Task.WhenAll(checks).ConfigureAwait(false);
         return new ConnectivityProbeResult(results);
     }
@@ -47,13 +61,13 @@ public sealed class ConnectivityProbe
         }
     }
 
-    private static HttpClient CreateHttpClient() => new(new HttpClientHandler
+    internal static HttpClientHandler CreateDirectHandler() => new()
     {
-        UseProxy = true,
+        UseProxy = false,
         Proxy = null,
         AllowAutoRedirect = true,
         AutomaticDecompression = DecompressionMethods.All
-    });
+    };
 }
 
 public readonly record struct ConnectivityProbeItem(

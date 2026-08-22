@@ -187,7 +187,7 @@ public sealed class NetworkWatcher : IAsyncDisposable
                 return;
             }
 
-            if (!probe.NoneReachable)
+            if (!ShouldRecoverAfterConnectivityProbe(probe))
             {
                 _failureStarted = null;
                 _nextProbeAllowedUtc = DateTimeOffset.UtcNow.AddSeconds(30);
@@ -206,6 +206,9 @@ public sealed class NetworkWatcher : IAsyncDisposable
             SetStatus(WatcherStatus.Normal, "网络正常");
         }
     }
+
+    internal static bool ShouldRecoverAfterConnectivityProbe(ConnectivityProbeResult probe) =>
+        probe.NoneReachable;
 
     private async Task TriggerRecoveryAsync(bool manual, CancellationToken cancellationToken = default)
     {

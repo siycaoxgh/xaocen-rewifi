@@ -99,7 +99,7 @@ public sealed class WifiController
         return RecoveryResult.Succeeded();
     }
 
-    private static bool IsAdministrator()
+    internal static bool IsAdministrator()
     {
         using var identity = WindowsIdentity.GetCurrent();
         return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
