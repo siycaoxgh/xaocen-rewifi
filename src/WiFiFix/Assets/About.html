@@ -72,6 +72,11 @@
     <ul><li>Windows 10 / Windows 11</li><li>.NET 10 SDK</li><li>WinForms</li></ul>
     <p>程序需要管理员权限，因为恢复流程需要启用或禁用 Wi‑Fi 网卡。开机启动使用 Windows 任务计划程序，并以最高权限运行。</p>
 
+    <h2>跨电脑使用要求</h2>
+    <p>独立 EXE 可以直接复制到其他电脑，但不适用于所有设备：</p>
+    <ul><li>支持 Windows 10 / Windows 11；</li><li>目标电脑应为 Intel/AMD x64 架构；</li><li>运行时需要允许管理员权限；</li><li>目标电脑必须存在可用的 Wi‑Fi 网卡；</li><li>目标 Wi‑Fi 必须先在该电脑上手动连接，并由 Windows 保存 Profile。</li></ul>
+    <p>不支持安卓手机、iPhone、macOS、Linux 等非 Windows 设备。移动 EXE 不会携带原电脑的配置；换到新电脑后，需要重新设置目标 Wi‑Fi 和网卡名称，开机启动任务也需要在新电脑重新创建。</p>
+
     <h2>编译</h2>
     <pre><code>dotnet build .\XAOCEN-WiFiFix.sln -c Release
 
