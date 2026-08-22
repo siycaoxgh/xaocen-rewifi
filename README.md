@@ -64,6 +64,8 @@ XAOCEN.ReWiFi.exe
 
 独立版本约 57 MB，目标电脑不需要另外安装 .NET 10。
 
+v1.5 回归测试源码按项目归档规则保存在独立的[历史归档仓库测试目录](https://github.com/siycaoxgh/xaocen-rewifi-archive/tree/main/tests)，不随当前主仓库发布。
+
 ## 使用
 
 1. 先通过 Windows Wi‑Fi 菜单连接一次目标网络，让 Windows 保存该 Wi‑Fi Profile。

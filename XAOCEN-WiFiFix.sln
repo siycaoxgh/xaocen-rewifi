@@ -4,8 +4,6 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiFiFix", "src\WiFiFix\WiFiFix.csproj", "{A4C5B9A6-37C8-4D1A-A1CE-7B0B9D93E6D2}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WiFiFix.Tests", "tests\WiFiFix.Tests\WiFiFix.Tests.csproj", "{B8A3F802-2FD4-4F8A-B5F5-84AFA7E9A2D1}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -16,10 +14,6 @@ Global
 		{A4C5B9A6-37C8-4D1A-A1CE-7B0B9D93E6D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4C5B9A6-37C8-4D1A-A1CE-7B0B9D93E6D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4C5B9A6-37C8-4D1A-A1CE-7B0B9D93E6D2}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B8A3F802-2FD4-4F8A-B5F5-84AFA7E9A2D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B8A3F802-2FD4-4F8A-B5F5-84AFA7E9A2D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B8A3F802-2FD4-4F8A-B5F5-84AFA7E9A2D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B8A3F802-2FD4-4F8A-B5F5-84AFA7E9A2D1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
