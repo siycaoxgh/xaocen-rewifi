@@ -41,11 +41,31 @@ public sealed class TrayManager : IDisposable
 
         var settingsItem = new ToolStripMenuItem("设置");
         settingsItem.Click += (_, _) => SettingsRequested?.Invoke();
-        var aboutItem = new ToolStripMenuItem("产品介绍");
-        aboutItem.Click += (_, _) => AboutRequested?.Invoke();
+        var accountItem = new ToolStripMenuItem("账号与离线授权");
+        accountItem.Click += (_, _) => AccountRequested?.Invoke();
+        var onlineDocsItem = new ToolStripMenuItem("在线文档");
+        onlineDocsItem.Click += (_, _) => OnlineDocumentationRequested?.Invoke();
+        var localDocsItem = new ToolStripMenuItem("本地文档");
+        localDocsItem.Click += (_, _) => LocalDocumentationRequested?.Invoke();
+        var documentationMenu = new ToolStripMenuItem("文档与帮助");
+        documentationMenu.DropDownItems.AddRange([onlineDocsItem, localDocsItem]);
+        var feedbackItem = new ToolStripMenuItem("报告问题");
+        feedbackItem.Click += (_, _) => FeedbackRequested?.Invoke();
+        var diagnosticItem = new ToolStripMenuItem("复制脱敏诊断信息");
+        diagnosticItem.Click += (_, _) => DiagnosticRequested?.Invoke();
         var logItem = new ToolStripMenuItem("查看运行日志");
         logItem.Click += (_, _) => OpenLog();
-        _menu.Items.AddRange([_autoRecoveryItem, _autoStartItem, settingsItem, aboutItem, logItem, new ToolStripSeparator()]);
+        var supportMenu = new ToolStripMenuItem("帮助与反馈");
+        supportMenu.DropDownItems.AddRange([feedbackItem, diagnosticItem, logItem]);
+        _menu.Items.AddRange([
+            _autoRecoveryItem,
+            _autoStartItem,
+            settingsItem,
+            accountItem,
+            documentationMenu,
+            supportMenu,
+            new ToolStripSeparator()
+        ]);
 
         var exitItem = new ToolStripMenuItem("退出");
         exitItem.Click += (_, _) => ExitRequested?.Invoke();
@@ -65,7 +85,11 @@ public sealed class TrayManager : IDisposable
     public event Action<bool>? AutoRecoveryChanged;
     public event Action<bool>? AutoStartChanged;
     public event Action? SettingsRequested;
-    public event Action? AboutRequested;
+    public event Action? AccountRequested;
+    public event Action? OnlineDocumentationRequested;
+    public event Action? LocalDocumentationRequested;
+    public event Action? FeedbackRequested;
+    public event Action? DiagnosticRequested;
     public event Action? ExitRequested;
 
     public void ApplyConfig(AppConfig config)

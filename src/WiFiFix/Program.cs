@@ -32,8 +32,14 @@ internal static class Program
         AppLogger.Info($"启动任务状态：存在={startupManager.IsEnabled()}; 任务路径={startupManager.GetConfiguredExecutablePath()}; 当前进程路径={Environment.ProcessPath}");
 
         var controller = new WifiController();
+        var accountClient = new AccountClient();
+        var offlineAuthorizationManager = new OfflineAuthorizationManager(accountClient);
+        var accountSessionManager = new AccountSessionManager(accountClient, devicePublicKeyProvider: offlineAuthorizationManager.GetDevicePublicKey);
         var watcher = new NetworkWatcher(config, controller, new ConnectivityProbe());
         var tray = new TrayManager(config);
+
+        _ = RestoreAccountSessionAsync();
+        _ = EvaluateOfflineAuthorizationAsync();
 
         watcher.StatusChanged += tray.SetStatus;
         watcher.NotificationRequested += tray.ShowNotification;
@@ -55,7 +61,7 @@ internal static class Program
         };
         tray.SettingsRequested += () =>
         {
-            using var form = new SettingsForm(config, controller, updatedConfig =>
+            using var form = new SettingsForm(config, controller, accountSessionManager, offlineAuthorizationManager, updatedConfig =>
             {
                 var startupApplied = startupManager.SetEnabled(updatedConfig.AutoStart);
                 updatedConfig.AutoStart = updatedConfig.AutoStart ? startupApplied : !startupApplied;
@@ -67,27 +73,74 @@ internal static class Program
             });
             form.ShowDialog();
         };
-        tray.AboutRequested += () => AboutPage.TryOpen();
+        tray.AccountRequested += () =>
+        {
+            using var form = new AuthorizationForm(accountSessionManager, offlineAuthorizationManager);
+            form.ShowDialog();
+        };
+        tray.OnlineDocumentationRequested += () => DocumentationRouter.OpenOnline();
+        tray.LocalDocumentationRequested += () => DocumentationRouter.OpenLocal();
+        tray.FeedbackRequested += () => FeedbackService.TryOpenSupport();
+        tray.DiagnosticRequested += () =>
+        {
+            if (!FeedbackService.TryCopyDiagnostic(config))
+            {
+                MessageBox.Show("无法复制脱敏诊断信息。", ProductInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                tray.ShowNotification("脱敏诊断信息已复制，可粘贴到问题反馈中。");
+            }
+        };
         tray.ExitRequested += () =>
         {
             _ = ExitAsync();
         };
 
-        if (!config.WelcomeShown && AboutPage.TryOpen())
+        if (!config.WelcomeShown && DocumentationRouter.OpenAsync().GetAwaiter().GetResult())
         {
             config.WelcomeShown = true;
             AppConfig.Save(config);
-            AppLogger.Info("首次启动已打开本地产品介绍页面。");
+            AppLogger.Info("首次启动已打开产品文档。");
         }
 
         watcher.Start();
         AppLogger.Info($"日志文件：{AppLogger.LogPath}");
         Application.Run();
 
+        async Task RestoreAccountSessionAsync()
+        {
+            try
+            {
+                await accountSessionManager.TryRestoreAsync();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning($"XAOCEN Account 会话恢复失败：{ex.Message}");
+            }
+        }
+
+        async Task EvaluateOfflineAuthorizationAsync()
+        {
+            try
+            {
+                var decision = await offlineAuthorizationManager.EvaluateAsync();
+                if (decision.Mode != OfflineAuthorizationMode.NoLicense)
+                {
+                    AppLogger.Info($"离线授权检查：模式={decision.Mode}; 结果={decision.LocalResult.Status}。");
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning($"离线授权检查失败：{ex.Message}");
+            }
+        }
+
         async Task ExitAsync()
         {
             await watcher.DisposeAsync();
             tray.Dispose();
+            accountSessionManager.Dispose();
             Application.ExitThread();
         }
     }

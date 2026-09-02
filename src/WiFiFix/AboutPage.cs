@@ -9,7 +9,9 @@ public static class AboutPage
     private const string AboutFileName = "XAOCEN-ReWiFi-介绍.html";
     private const string BannerFileName = "xaocen-rewifi.png";
 
-    public static bool TryOpen()
+    public static bool TryOpen() => TryOpenLocal();
+
+    public static bool TryOpenLocal()
     {
         try
         {

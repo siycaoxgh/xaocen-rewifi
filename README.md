@@ -1,4 +1,4 @@
-# XAOCEN ReWiFi v1.5
+# XAOCEN ReWiFi v2.0
 
 ![XAOCEN ReWiFi 无线重连工具](assets/xaocen-rewifi.png)
 
@@ -12,7 +12,9 @@ XAOCEN ReWiFi 无线重连工具
 
 XAOCEN ReWiFi 是一个轻量的 Windows Wi‑Fi 自动恢复托盘工具。它持续读取 Windows 自己维护的网络状态，在指定 Wi‑Fi 出现持续异常时，自动关闭并重新开启 Wi‑Fi 网卡，然后连接 Windows 已保存的 Wi‑Fi Profile。
 
-程序不保存 Wi‑Fi 密码，不管理代理软件，不连接自有服务器，也不提供测速、账号或云端功能。
+程序不保存 Wi‑Fi 密码，不管理代理软件。v2.0 按 Account 协议访问 `auth.xaocen.studio`；访问令牌只保存在内存，刷新令牌和离线设备私钥保存在 Windows Credential Manager，不写入配置文件、日志或普通明文文件。
+
+> v1.5 为稳定归档版本。v2.0 在同一版本内接入 XAOCEN Account：网络可用时优先在线校验，网络不可用时自动回退到本地离线签名校验。账号登录由 XAOCEN Account 官网完成，ReWiFi 不重复实现邮箱或第三方登录。客户端不采集匿名遥测。
 
 GitHub 项目主页：[siycaoxgh/xaocen-rewifi](https://github.com/siycaoxgh/xaocen-rewifi)
 
@@ -65,7 +67,7 @@ dotnet build .\XAOCEN-WiFiFix.sln -c Release
 发布为压缩的独立单文件 EXE：
 
 ```powershell
-dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\src\WiFiFix\bin\Release\v1.5-publish
+dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\build\v2.0-publish
 ```
 
 输出文件名为：
@@ -74,7 +76,7 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
 XAOCEN.ReWiFi.exe
 ```
 
-独立版本约 57 MB，目标电脑不需要另外安装 .NET 10。
+独立版本约 92 MB（约 88 MiB），目标电脑不需要另外安装 .NET 10。当前发布使用 `net10.0-windows`，避免携带不必要的固定 Windows SDK 运行组件；摄像头二维码扫描核心仍保留。
 
 v1.5 回归测试源码按项目归档规则保存在独立的[历史归档仓库测试目录](https://github.com/siycaoxgh/xaocen-rewifi-archive/tree/main/tests)，不随当前主仓库发布。
 
@@ -86,7 +88,41 @@ v1.5 回归测试源码按项目归档规则保存在独立的[历史归档仓�
 4. 点击“自动识别当前连接”，程序会自动填入当前 SSID 和 Wi‑Fi 网卡名称。
 5. 保存设置即可。默认异常等待 5 秒、恢复冷却 30 秒、自动恢复和开机启动均开启。
 
-首次启动时程序会自动打开本地产品介绍页面；之后可以从设置窗口或托盘菜单重新打开。
+首次启动时程序会优先检查在线产品文档；网络不可用或在线地址无法访问时自动打开本地产品介绍页面。之后可从设置窗口或托盘菜单分别打开在线文档或本地文档；“产品文档（自动选择）”仅作为首次启动行为，不再作为重复按钮显示。
+
+托盘顶部保留产品名称、版本、状态、立即恢复、自动恢复和开机启动；其余入口收纳到“设置”“账号与离线授权”“文档与帮助”和“帮助与反馈”菜单中。设置窗口将账号授权、网络恢复和帮助与文档分为三个区域，同时在 Windows 任务栏显示独立图标，便于从其他窗口后方找回。账号卡片只保留一个“打开授权中心”入口，避免与托盘入口和设置页重复。
+
+## XAOCEN Account 与离线授权（v2.0）
+
+ReWiFi 不在客户端重复实现邮箱或第三方登录，在线账号授权统一跳转 XAOCEN Account 官网完成。设置窗口中的“账号与离线授权”卡片只提供一个“打开授权中心”入口，授权中心集中展示账号会话、ReWiFi 产品权益和离线授权状态。在线会话使用设备授权、刷新、退出和撤销接口：
+
+- 参数固定为 `productId=rewifi`、`platform=windows-x64`；
+- 短期访问令牌只保存在内存；
+- 刷新令牌保存到 Windows Credential Manager，并在刷新时轮换；
+- 服务端错误只记录必要的请求编号，不记录令牌或响应中的敏感内容。
+- 登录成功或会话恢复后调用 `GET /v1/account/entitlements`，只展示 `productId=rewifi` 的权益状态，不在客户端创建或修改权益。
+- 授权等待期间，授权中心会显示“等待账号批准”、授权截止时间、上次轮询时间、下一次轮询时间、当前轮询次数和授权剩余时间；
+- 授权完成后显示“XAOCEN Account 已连接”，以授权中心中的状态为准，浏览器页面可以手动关闭。
+
+需要区分两种状态：左侧“XAOCEN Account 已连接”表示本机已建立可恢复的账号会话；右侧“离线授权联网校验通过”表示当前离线授权文件和设备状态已通过 Account 服务端核验。离线授权联网校验不会自动建立账号登录会话，二者可以独立存在。设置页和授权中心会同步显示最近一次检查模式、权益到期、下次联网检查和最迟重新授权日期。
+
+离线授权使用同一版本的本地回退路径：
+
+1. 在设置中复制本机生成的 Ed25519 离线设备公钥；
+2. 由已登录 XAOCEN Account 的联网设备申请离线授权；
+3. 将服务端签发的 `.xaocen-license` 文件带回 ReWiFi 并导入；
+4. 客户端内置 `primary` 公钥，校验签名、产品、平台、设备公钥摘要和时间策略；
+5. 可以显示设备公钥二维码，供联网手机或 Account 网页扫描；
+6. 可以扫描 Account 返回的 `compactLicense` 授权二维码，也可以继续使用字符串或文件导入；
+7. 网络可用时调用 Account 离线检查/重新签发接口，网络失败时不把网络故障误判为签名无效，继续使用本地有效授权。
+
+扫描授权二维码需要 Windows 摄像头访问权限；摄像头不可用或未授权时，可以继续使用授权字符串粘贴或 `.xaocen-license` 文件导入。
+
+针对低像素电脑摄像头，Account 授权二维码使用更大的显示尺寸，ReWiFi 扫描端也会自动尝试灰度、二值化和放大识别；如果仍无法识别，优先使用授权字符串或文件导入。
+
+详细的客户端与 Account 项目边界、密钥位置和联调步骤见[授权接入分工与联调清单](授权接入分工与联调清单.md)。
+
+离线设备私钥只保存在 Windows Credential Manager。当前实现使用 Account API 已确认的 `compactLicense` 规范和 `primary` 公钥；在线优先、本地回退和二维码传输均为正式客户端能力。
 
 ## 网络判断
 
@@ -116,6 +152,21 @@ Google 和百度探测使用直连，并明确绕过系统代理以及 `HTTP_PRO
 ```text
 %LOCALAPPDATA%\XAOCEN ReWiFi\config.json
 ```
+
+离线授权文件：
+
+```text
+%LOCALAPPDATA%\XAOCEN ReWiFi\offline-license.xaocen-license
+```
+
+账号刷新令牌和离线设备私钥不在普通文件中，分别保存在当前 Windows 用户的 Credential Manager：
+
+```text
+XAOCEN.ReWiFi/auth.xaocen.studio
+XAOCEN.ReWiFi/offline-device-key
+```
+
+从 v1.7 升级到 v1.8.x 时，这些路径和凭据名称保持不变，因此新 EXE 会自动读取原来的配置、离线授权文件、账号刷新令牌和设备私钥，不会因为替换程序文件而重新生成。导入新的离线授权会覆盖旧授权文件；退出账号或撤销设备会删除账号刷新令牌；换电脑、换 Windows 用户或离线设备私钥损坏时，不能直接沿用原设备授权。
 
 本地产品介绍页面：
 
