@@ -23,6 +23,11 @@ internal static class Program
         AppLogger.StartSession();
         var config = AppConfig.Load();
         AppLogger.Info($"配置：SSID={config.TargetSsid}; 网卡={config.AdapterName}; 异常等待={config.FailureDelaySeconds}s; 冷却={config.CooldownSeconds}s; 自动恢复={config.AutoRecovery}; 开机启动={config.AutoStart}; 连通性探测={config.EnableConnectivityProbe}; 探测超时={config.ConnectivityProbeTimeoutSeconds}s");
+        var telemetry = new TelemetryClient();
+        telemetry.InstallGlobalExceptionHandlers();
+        telemetry.AddSensitiveValue(config.TargetSsid);
+        telemetry.AddSensitiveValue(config.AdapterName);
+        telemetry.InitializeSession();
         var startupManager = new StartupManager();
         if (config.AutoStart)
         {
@@ -38,12 +43,50 @@ internal static class Program
         var watcher = new NetworkWatcher(config, controller, new ConnectivityProbe());
         var tray = new TrayManager(config);
 
+        accountSessionManager.AuthorizationResult += result =>
+        {
+            telemetry.RecordEntitlementCheck(
+                "online",
+                result.Success ? "authorized" : "rejected",
+                result.ErrorCode);
+        };
+        offlineAuthorizationManager.LicenseImported += result =>
+        {
+            telemetry.RecordEntitlementCheck(
+                "offline",
+                result.IsValid ? "authorized" : "rejected",
+                result.IsValid ? null : result.Status.ToString());
+        };
+        offlineAuthorizationManager.StateChanged += () =>
+        {
+            var decision = offlineAuthorizationManager.LastDecision;
+            if (decision is null)
+            {
+                return;
+            }
+
+            var mode = decision.Mode switch
+            {
+                OfflineAuthorizationMode.Online => "online",
+                OfflineAuthorizationMode.Offline => "offline",
+                _ => "offline"
+            };
+            telemetry.RecordEntitlementCheck(
+                mode,
+                decision.IsAllowed ? "valid" : "invalid",
+                decision.LocalResult.IsValid ? null : decision.LocalResult.Status.ToString());
+        };
+
         _ = RestoreAccountSessionAsync();
         _ = EvaluateOfflineAuthorizationAsync();
 
         watcher.StatusChanged += tray.SetStatus;
         watcher.NotificationRequested += tray.ShowNotification;
-        tray.RecoveryRequested += () => _ = watcher.TriggerManualRecoveryAsync();
+        tray.RecoveryRequested += () =>
+        {
+            telemetry.MarkFeatureUsed("manual-recovery");
+            _ = watcher.TriggerManualRecoveryAsync();
+        };
         tray.AutoRecoveryChanged += enabled =>
         {
             config.AutoRecovery = enabled;
@@ -61,7 +104,8 @@ internal static class Program
         };
         tray.SettingsRequested += () =>
         {
-            using var form = new SettingsForm(config, controller, accountSessionManager, offlineAuthorizationManager, updatedConfig =>
+            telemetry.MarkFeatureUsed("settings.opened");
+            using var form = new SettingsForm(config, controller, accountSessionManager, offlineAuthorizationManager, telemetry, updatedConfig =>
             {
                 var startupApplied = startupManager.SetEnabled(updatedConfig.AutoStart);
                 updatedConfig.AutoStart = updatedConfig.AutoStart ? startupApplied : !startupApplied;
@@ -75,6 +119,7 @@ internal static class Program
         };
         tray.AccountRequested += () =>
         {
+            telemetry.MarkFeatureUsed("account.opened");
             using var form = new AuthorizationForm(accountSessionManager, offlineAuthorizationManager);
             form.ShowDialog();
         };
@@ -105,6 +150,7 @@ internal static class Program
         }
 
         watcher.Start();
+        telemetry.RecordCoreActivation(System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable() ? "online" : "offline");
         AppLogger.Info($"日志文件：{AppLogger.LogPath}");
         Application.Run();
 
@@ -138,10 +184,19 @@ internal static class Program
 
         async Task ExitAsync()
         {
-            await watcher.DisposeAsync();
-            tray.Dispose();
-            accountSessionManager.Dispose();
-            Application.ExitThread();
+            try
+            {
+                await watcher.DisposeAsync();
+                tray.Dispose();
+                accountSessionManager.Dispose();
+                using var telemetryTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                await telemetry.ShutdownAsync(telemetryTimeout.Token);
+            }
+            finally
+            {
+                telemetry.Dispose();
+                Application.ExitThread();
+            }
         }
     }
 }

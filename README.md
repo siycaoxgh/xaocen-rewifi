@@ -14,7 +14,7 @@ XAOCEN ReWiFi 是一个轻量的 Windows Wi‑Fi 自动恢复托盘工具。它�
 
 程序不保存 Wi‑Fi 密码，不管理代理软件。v2.0 按 Account 协议访问 `auth.xaocen.studio`；访问令牌只保存在内存，刷新令牌和离线设备私钥保存在 Windows Credential Manager，不写入配置文件、日志或普通明文文件。
 
-> v1.5 为稳定归档版本。v2.0 在同一版本内接入 XAOCEN Account：网络可用时优先在线校验，网络不可用时自动回退到本地离线签名校验。账号登录由 XAOCEN Account 官网完成，ReWiFi 不重复实现邮箱或第三方登录。客户端不采集匿名遥测。
+> v1.5 为稳定归档版本。v2.0 在同一版本内接入 XAOCEN Account：网络可用时优先在线校验，网络不可用时自动回退到本地离线签名校验。账号登录由 XAOCEN Account 官网完成，ReWiFi 不重复实现邮箱或第三方登录。普通 v2.0 发布构建不上传匿名遥测；当前仅提供独立的测试构建验证统计协议。
 
 GitHub 项目主页：[siycaoxgh/xaocen-rewifi](https://github.com/siycaoxgh/xaocen-rewifi)
 
@@ -123,6 +123,25 @@ ReWiFi 不在客户端重复实现邮箱或第三方登录，在线账号授权�
 详细的客户端与 Account 项目边界、密钥位置和联调步骤见[授权接入分工与联调清单](授权接入分工与联调清单.md)。
 
 离线设备私钥只保存在 Windows Credential Manager。当前实现使用 Account API 已确认的 `compactLicense` 规范和 `primary` 公钥；在线优先、本地回退和二维码传输均为正式客户端能力。
+
+## 遥测统计（测试接入）
+
+ReWiFi 已加入 XAOCEN Telemetry API 的 C# 适配层，但生产遥测服务尚未启用。普通发布构建不会连接测试地址；只有显式使用 `TelemetryTest=true` 构建的测试包才会连接：
+
+```text
+https://telemetry-test.xaocen.studio/v1/telemetry/events
+```
+
+测试构建仍需用户分别同意“匿名使用统计”和“匿名崩溃报告”。拒绝或关闭统计不会影响 Wi-Fi 恢复、XAOCEN Account 授权或离线授权。客户端只生成随机匿名 `instanceId` 和每次启动更新的 `sessionId`，不上传账号、令牌、公钥全文、授权内容、SSID、网卡名称、MAC、IP、完整日志或文件内容。
+
+统计本地数据位于：
+
+```text
+%LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\state.json
+%LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\queue.json
+```
+
+客户端支持首次运行、启动、版本更新、核心功能激活、授权检查、功能使用汇总和脱敏崩溃事件；断网时暂存，网络恢复后批量发送，服务端按 `eventId` 去重。详细的事件字段、测试构建和隐私边界见[遥测接入与隐私说明](遥测接入与隐私说明.md)。
 
 ## 网络判断
 

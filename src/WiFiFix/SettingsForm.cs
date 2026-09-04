@@ -15,21 +15,27 @@ public sealed class SettingsForm : Form
     private readonly WifiController _wifiController;
     private readonly AccountSessionManager _accountSessionManager;
     private readonly OfflineAuthorizationManager _offlineAuthorizationManager;
+    private readonly TelemetryClient _telemetry;
     private readonly Action<AppConfig> _saveAction;
     private readonly Label _accountSummary = CreateSummaryLabel();
     private readonly Label _authorizationSummary = CreateSummaryLabel();
+    private readonly CheckBox _analyticsConsent = new();
+    private readonly CheckBox _crashConsent = new();
+    private readonly Label _telemetryStatus = CreateSummaryLabel();
 
     internal SettingsForm(
         AppConfig config,
         WifiController wifiController,
         AccountSessionManager accountSessionManager,
         OfflineAuthorizationManager offlineAuthorizationManager,
+        TelemetryClient telemetry,
         Action<AppConfig> saveAction)
     {
         _initialConfig = config.Clone();
         _wifiController = wifiController;
         _accountSessionManager = accountSessionManager;
         _offlineAuthorizationManager = offlineAuthorizationManager;
+        _telemetry = telemetry;
         _saveAction = saveAction;
         Text = $"{ProductInfo.ProductName} 设置";
         BackColor = Color.FromArgb(247, 249, 251);
@@ -39,7 +45,7 @@ public sealed class SettingsForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
         Icon = LoadApplicationIcon();
-        ClientSize = new Size(820, 720);
+        ClientSize = new Size(820, 810);
         _ssidTextBox.Text = _initialConfig.TargetSsid;
         _adapterTextBox.Text = _initialConfig.AdapterName;
 
@@ -48,12 +54,13 @@ public sealed class SettingsForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(14),
             ColumnCount = 1,
-            RowCount = 5
+            RowCount = 6
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 198));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
@@ -162,6 +169,7 @@ public sealed class SettingsForm : Form
         layout.Controls.Add(settingsGroup, 0, 2);
 
         layout.Controls.Add(CreateHelpGroup(), 0, 3);
+        layout.Controls.Add(CreateTelemetryGroup(), 0, 4);
 
         var buttonBar = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
         var saveButton = new Button
@@ -177,7 +185,7 @@ public sealed class SettingsForm : Form
         saveButton.Click += SaveButtonOnClick;
         buttonBar.Controls.Add(saveButton);
         buttonBar.Resize += (_, _) => saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
-        layout.Controls.Add(buttonBar, 0, 4);
+        layout.Controls.Add(buttonBar, 0, 5);
 
         Controls.Add(layout);
         AcceptButton = saveButton;
@@ -273,6 +281,65 @@ public sealed class SettingsForm : Form
         return group;
     }
 
+    private GroupBox CreateTelemetryGroup()
+    {
+        var group = new GroupBox
+        {
+            Text = _telemetry.GetStatus().IsTestBuild ? "隐私与统计（测试）" : "隐私与统计",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(23, 33, 43)
+        };
+        var table = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 2,
+            Margin = new Padding(0)
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var consent = _telemetry.Consent;
+        _analyticsConsent.Text = "匿名使用统计";
+        _analyticsConsent.Checked = consent.Analytics;
+        _crashConsent.Text = "匿名崩溃报告";
+        _crashConsent.Checked = consent.Crash;
+        var enabled = _telemetry.GetStatus().IsTestBuild;
+        _analyticsConsent.Enabled = enabled;
+        _crashConsent.Enabled = enabled;
+        table.Controls.Add(_analyticsConsent, 0, 0);
+        table.Controls.Add(_crashConsent, 1, 0);
+
+        _telemetryStatus.Text = _telemetry.StatusText;
+        _telemetryStatus.Font = new Font("Microsoft YaHei UI", 8.5F);
+        _telemetryStatus.Margin = new Padding(6, 1, 0, 1);
+        table.Controls.Add(_telemetryStatus, 2, 0);
+        table.SetRowSpan(_telemetryStatus, 2);
+
+        var resetButton = CreateSectionButton("重置匿名标识并删除待上传数据");
+        resetButton.Height = 26;
+        resetButton.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "这将删除本地待上传统计并生成新的匿名标识，是否继续？", ProductInfo.ProductName,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _telemetry.ResetInstanceId();
+            _telemetryStatus.Text = _telemetry.StatusText;
+        };
+        table.Controls.Add(resetButton, 0, 1);
+        table.SetColumnSpan(resetButton, 2);
+        group.Controls.Add(table);
+        return group;
+    }
+
     private async Task DetectCurrentWifiAsync(Button button)
     {
         button.Enabled = false;
@@ -321,6 +388,7 @@ public sealed class SettingsForm : Form
 
         try
         {
+            _telemetry.SetConsent(_analyticsConsent.Checked, _crashConsent.Checked);
             _saveAction(config);
             DialogResult = DialogResult.OK;
             Close();

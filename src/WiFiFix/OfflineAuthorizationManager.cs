@@ -21,6 +21,7 @@ internal sealed class OfflineAuthorizationManager
     public OfflineAuthorizationDecision? LastDecision { get; private set; }
 
     public event Action? StateChanged;
+    public event Action<OfflineLicenseValidationResult>? LicenseImported;
 
     public string GetDevicePublicKey() => _licenseService.GetOrCreateDevicePublicKey();
 
@@ -34,6 +35,14 @@ internal sealed class OfflineAuthorizationManager
         }
 
         StateChanged?.Invoke();
+        try
+        {
+            LicenseImported?.Invoke(result);
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"离线授权统计事件处理失败：{exception.GetType().Name}");
+        }
 
         return result;
     }

@@ -18,6 +18,7 @@ config.json
 *.crt
 
 # Local publish/output folders
+build/
 publish/
 *-publish/
 archive/
