@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace XAOCEN.ReWiFi;
@@ -10,17 +11,19 @@ namespace XAOCEN.ReWiFi;
 internal static class TelemetryBuild
 {
 #if TELEMETRY_TEST
+    public static readonly bool IsEnabled = true;
     public static readonly bool IsTestBuild = true;
     public static readonly string EventsEndpoint = "https://telemetry-test.xaocen.studio/v1/telemetry/events";
     public static readonly string Channel = "test";
 #else
+    public static readonly bool IsEnabled = true;
     public static readonly bool IsTestBuild = false;
-    public static readonly string EventsEndpoint = "";
+    public static readonly string EventsEndpoint = "https://auth.xaocen.studio/v1/telemetry/events";
     public static readonly string Channel = "release";
 #endif
 
     public const string SchemaVersion = "1.0";
-    public const string PolicyVersion = "2026-09-04";
+    public const string PolicyVersion = "2026-09-13";
 }
 
 internal static class TelemetryEventNames
@@ -40,12 +43,15 @@ internal static class TelemetryEventNames
 internal readonly record struct TelemetryConsentSnapshot(
     bool Analytics,
     bool Crash,
+    bool AllUploadsDisabled,
     string PolicyVersion);
 
 internal readonly record struct TelemetryStatusSnapshot(
+    bool IsEnabled,
     bool IsTestBuild,
     bool AnalyticsConsent,
     bool CrashConsent,
+    bool AllUploadsDisabled,
     int QueuedEvents,
     string InstanceId);
 
@@ -63,7 +69,16 @@ internal sealed class TelemetryClient : IDisposable
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = false
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private static readonly HashSet<string> BasicEventNames = new(StringComparer.Ordinal)
+    {
+        TelemetryEventNames.FirstRun,
+        TelemetryEventNames.Start,
+        TelemetryEventNames.Updated,
+        TelemetryEventNames.ActivationSuccess
     };
 
     private static readonly IReadOnlyDictionary<string, HashSet<string>> AllowedProperties =
@@ -118,6 +133,8 @@ internal sealed class TelemetryClient : IDisposable
     private bool _disposed;
     private int _flushInProgress;
 
+    public event Action? StatusChanged;
+
     public TelemetryClient()
     {
         _state = _store.LoadState();
@@ -132,7 +149,11 @@ internal sealed class TelemetryClient : IDisposable
         {
             lock (_sync)
             {
-                return new TelemetryConsentSnapshot(_state.AnalyticsConsent, _state.CrashConsent, _state.PolicyVersion);
+                return new TelemetryConsentSnapshot(
+                    _state.AnalyticsConsent,
+                    _state.CrashConsent,
+                    _state.AllUploadsDisabled,
+                    _state.PolicyVersion);
             }
         }
     }
@@ -142,9 +163,11 @@ internal sealed class TelemetryClient : IDisposable
         lock (_sync)
         {
             return new TelemetryStatusSnapshot(
+                TelemetryBuild.IsEnabled,
                 TelemetryBuild.IsTestBuild,
                 _state.AnalyticsConsent,
                 _state.CrashConsent,
+                _state.AllUploadsDisabled,
                 _queue.Count,
                 _state.InstanceId);
         }
@@ -157,8 +180,12 @@ internal sealed class TelemetryClient : IDisposable
             var status = GetStatus();
             var endpointText = status.IsTestBuild
                 ? "测试接收地址已配置"
-                : "当前构建未启用遥测上传";
-            return $"{endpointText}。匿名统计：{(status.AnalyticsConsent ? "已同意" : "未同意")}；崩溃报告：{(status.CrashConsent ? "已同意" : "未同意")}；待上传：{status.QueuedEvents} 条。\n拒绝或关闭统计不会影响 Wi-Fi 恢复、账号授权或离线运行。";
+                : status.IsEnabled ? "正式接收地址已配置" : "当前构建未启用遥测上传";
+            var basicText = status.AllUploadsDisabled ? "已禁止" : status.IsEnabled ? "已启用" : "未发送";
+            var enhancedText = status.AnalyticsConsent ? "已同意" : "未同意";
+            var crashText = status.CrashConsent ? "已同意" : "未同意";
+            var uploadText = status.AllUploadsDisabled ? "所有上传均已停止" : $"待上传：{status.QueuedEvents} 条";
+            return $"{endpointText}\n基础统计：{basicText} · 增强分析：{enhancedText}\n崩溃报告：{crashText} · {uploadText}";
         }
     }
 
@@ -185,14 +212,15 @@ internal sealed class TelemetryClient : IDisposable
             _featureCount = 0;
             _completedCoreAction = false;
             _sessionStarted = false;
-            QueuePendingAnalyticsEventsUnsafe();
+            QueuePendingEventsUnsafe();
             _store.SaveState(_state);
         }
 
+        NotifyStatusChanged();
         RequestFlush();
     }
 
-    public void SetConsent(bool analytics, bool crash)
+    public void SetConsent(bool analytics, bool crash, bool allUploadsDisabled)
     {
         lock (_sync)
         {
@@ -201,29 +229,39 @@ internal sealed class TelemetryClient : IDisposable
             var previousCrash = _state.CrashConsent;
             _state.AnalyticsConsent = analytics;
             _state.CrashConsent = crash;
+            _state.AllUploadsDisabled = allUploadsDisabled;
             _state.PolicyVersion = TelemetryBuild.PolicyVersion;
 
-            if (!analytics)
+            if (allUploadsDisabled)
             {
-                _queue.RemoveAll(item => item.EventName is not TelemetryEventNames.CrashReported and not TelemetryEventNames.OptOut);
+                _queue.Clear();
+            }
+            else
+            {
+                if (!analytics)
+                {
+                    _queue.RemoveAll(item => IsEnhancedEvent(item.EventName));
+                }
+
+                if (!crash)
+                {
+                    _queue.RemoveAll(item => item.EventName == TelemetryEventNames.CrashReported);
+                }
+
+                var scope = GetOptOutScope(previousAnalytics, previousCrash, analytics, crash);
+                if (scope is not null)
+                {
+                    EnqueueUnsafe(TelemetryEventNames.OptOut, new Dictionary<string, object?> { ["scope"] = scope }, DateTimeOffset.UtcNow);
+                }
+
+                QueuePendingEventsUnsafe();
             }
 
-            if (!crash)
-            {
-                _queue.RemoveAll(item => item.EventName == TelemetryEventNames.CrashReported);
-            }
-
-            var scope = GetOptOutScope(previousAnalytics, previousCrash, analytics, crash);
-            if (scope is not null)
-            {
-                EnqueueUnsafe(TelemetryEventNames.OptOut, new Dictionary<string, object?> { ["scope"] = scope }, DateTimeOffset.UtcNow);
-            }
-
-            QueuePendingAnalyticsEventsUnsafe();
             _store.SaveState(_state);
             _store.SaveQueue(_queue);
         }
 
+        NotifyStatusChanged();
         RequestFlush();
     }
 
@@ -249,6 +287,8 @@ internal sealed class TelemetryClient : IDisposable
             _store.SaveState(_state);
             _store.SaveQueue(_queue);
         }
+
+        NotifyStatusChanged();
     }
 
     public void ClearQueuedEvents()
@@ -259,22 +299,41 @@ internal sealed class TelemetryClient : IDisposable
             _queue.Clear();
             _store.SaveQueue(_queue);
         }
+
+        NotifyStatusChanged();
     }
 
     public bool Track(string eventName, IReadOnlyDictionary<string, object?>? properties = null, DateTimeOffset? occurredAt = null)
     {
+        var tracked = false;
         lock (_sync)
         {
             ThrowIfDisposed();
-            if (eventName != TelemetryEventNames.OptOut &&
-                (eventName == TelemetryEventNames.CrashReported ? !_state.CrashConsent : !_state.AnalyticsConsent))
+            if (!TelemetryBuild.IsEnabled || _state.AllUploadsDisabled || !AllowedProperties.ContainsKey(eventName))
+            {
+                return false;
+            }
+
+            if (eventName == TelemetryEventNames.CrashReported && !_state.CrashConsent)
+            {
+                return false;
+            }
+
+            if (IsEnhancedEvent(eventName) && !_state.AnalyticsConsent)
             {
                 return false;
             }
 
             EnqueueUnsafe(eventName, properties, occurredAt ?? DateTimeOffset.UtcNow);
-            return true;
+            tracked = true;
         }
+
+        if (tracked)
+        {
+            NotifyStatusChanged();
+        }
+
+        return tracked;
     }
 
     public void RecordCoreActivation(string networkState)
@@ -286,7 +345,7 @@ internal sealed class TelemetryClient : IDisposable
             {
                 _state.ActivationObservedAt = DateTimeOffset.UtcNow;
                 _state.ActivationNetworkState = networkState;
-                QueuePendingAnalyticsEventsUnsafe();
+                QueuePendingEventsUnsafe();
                 _store.SaveState(_state);
             }
         }
@@ -377,7 +436,7 @@ internal sealed class TelemetryClient : IDisposable
 
     public async Task<TelemetryFlushResult> FlushAsync(CancellationToken cancellationToken = default)
     {
-        if (!TelemetryBuild.IsTestBuild || string.IsNullOrWhiteSpace(TelemetryBuild.EventsEndpoint))
+        if (!TelemetryBuild.IsEnabled || string.IsNullOrWhiteSpace(TelemetryBuild.EventsEndpoint))
         {
             var remaining = GetStatus().QueuedEvents;
             return new TelemetryFlushResult(remaining, 0, remaining);
@@ -419,6 +478,8 @@ internal sealed class TelemetryClient : IDisposable
                     _store.SaveQueue(_queue);
                 }
 
+                NotifyStatusChanged();
+
                 sent += batch.Length;
             }
 
@@ -437,7 +498,7 @@ internal sealed class TelemetryClient : IDisposable
 
     public void RequestFlush()
     {
-        if (!TelemetryBuild.IsTestBuild || string.IsNullOrWhiteSpace(TelemetryBuild.EventsEndpoint))
+        if (!TelemetryBuild.IsEnabled || string.IsNullOrWhiteSpace(TelemetryBuild.EventsEndpoint))
         {
             return;
         }
@@ -454,7 +515,7 @@ internal sealed class TelemetryClient : IDisposable
                 return;
             }
 
-            if (_sessionStarted && _state.AnalyticsConsent)
+            if (_sessionStarted && !_state.AllUploadsDisabled && _state.AnalyticsConsent)
             {
                 EnqueueUnsafe(TelemetryEventNames.SessionSummary, new Dictionary<string, object?>
                 {
@@ -466,7 +527,7 @@ internal sealed class TelemetryClient : IDisposable
             }
         }
 
-        if (TelemetryBuild.IsTestBuild)
+        if (TelemetryBuild.IsEnabled)
         {
             await FlushAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -522,8 +583,9 @@ internal sealed class TelemetryClient : IDisposable
         lock (_sync)
         {
             var removed = _queue.RemoveAll(item =>
+                _state.AllUploadsDisabled ||
                 (item.EventName == TelemetryEventNames.CrashReported && !_state.CrashConsent) ||
-                (item.EventName != TelemetryEventNames.CrashReported && item.EventName != TelemetryEventNames.OptOut && !_state.AnalyticsConsent));
+                (IsEnhancedEvent(item.EventName) && !_state.AnalyticsConsent));
             if (removed > 0)
             {
                 _store.SaveQueue(_queue);
@@ -531,49 +593,34 @@ internal sealed class TelemetryClient : IDisposable
         }
     }
 
-    private void QueuePendingAnalyticsEventsUnsafe()
+    private void QueuePendingEventsUnsafe()
     {
-        if (!_state.AnalyticsConsent)
+        if (!TelemetryBuild.IsEnabled || _state.AllUploadsDisabled)
         {
             return;
         }
 
         if (_state.FirstObservedAt is { } firstObservedAt && !_state.FirstRunRecorded)
         {
-            EnqueueUnsafe(TelemetryEventNames.FirstRun, new Dictionary<string, object?>
-            {
-                ["installChannel"] = TelemetryBuild.Channel
-            }, firstObservedAt);
+            EnqueueUnsafe(TelemetryEventNames.FirstRun, null, firstObservedAt);
             _state.FirstRunRecorded = true;
         }
 
         if (!string.IsNullOrWhiteSpace(_state.PendingPreviousVersion))
         {
-            EnqueueUnsafe(TelemetryEventNames.Updated, new Dictionary<string, object?>
-            {
-                ["previousVersion"] = _state.PendingPreviousVersion,
-                ["installChannel"] = TelemetryBuild.Channel
-            }, DateTimeOffset.UtcNow);
+            EnqueueUnsafe(TelemetryEventNames.Updated, null, DateTimeOffset.UtcNow);
             _state.PendingPreviousVersion = null;
         }
 
         if (_state.ActivationObservedAt is { } activationObservedAt && !_state.ActivationRecorded)
         {
-            EnqueueUnsafe(TelemetryEventNames.ActivationSuccess, new Dictionary<string, object?>
-            {
-                ["authorizationMode"] = "none",
-                ["entitlementType"] = "free",
-                ["networkState"] = _state.ActivationNetworkState ?? "unknown"
-            }, activationObservedAt);
+            EnqueueUnsafe(TelemetryEventNames.ActivationSuccess, null, activationObservedAt);
             _state.ActivationRecorded = true;
         }
 
         if (!_sessionStarted)
         {
-            EnqueueUnsafe(TelemetryEventNames.Start, new Dictionary<string, object?>
-            {
-                ["launchSource"] = "startup"
-            }, DateTimeOffset.UtcNow);
+            EnqueueUnsafe(TelemetryEventNames.Start, null, DateTimeOffset.UtcNow);
             _sessionStarted = true;
         }
     }
@@ -597,11 +644,13 @@ internal sealed class TelemetryClient : IDisposable
             ProductId = ProductInfo.AccountProductId,
             Platform = ProductInfo.AccountPlatform,
             AppVersion = AppLogger.Version,
-            OsVersion = Environment.OSVersion.VersionString,
-            Architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),
-            Channel = TelemetryBuild.Channel,
+            OsVersion = eventName == TelemetryEventNames.CrashReported ? Environment.OSVersion.VersionString : null,
+            Architecture = eventName == TelemetryEventNames.CrashReported
+                ? System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()
+                : null,
+            Channel = null,
             Consent = consent,
-            Properties = CleanProperties(eventName, properties)
+            Properties = IsBasicEvent(eventName) ? null : CleanProperties(eventName, properties)
         };
 
         _queue.Add(eventDocument);
@@ -713,7 +762,10 @@ internal sealed class TelemetryClient : IDisposable
 
                     if (result.Rejected is { Count: > 0 })
                     {
-                        AppLogger.Warning($"遥测服务拒绝了 {result.Rejected.Count} 条事件；已按协议丢弃，不重复重试。");
+                        var rejectionSummary = result.Rejected
+                            .GroupBy(item => string.IsNullOrWhiteSpace(item.Code) ? "unknown" : item.Code.Trim(), StringComparer.OrdinalIgnoreCase)
+                            .Select(group => $"{group.Key}={group.Count()}");
+                        AppLogger.Warning($"遥测服务拒绝了 {result.Rejected.Count} 条事件；原因：{string.Join(", ", rejectionSummary)}；已按协议丢弃，不重复重试。");
                     }
 
                     return TelemetrySendOutcome.Success;
@@ -763,6 +815,18 @@ internal sealed class TelemetryClient : IDisposable
         return TelemetrySendOutcome.TemporaryFailure;
     }
 
+    private void NotifyStatusChanged()
+    {
+        try
+        {
+            StatusChanged?.Invoke();
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"遥测状态刷新通知失败：{exception.GetType().Name}");
+        }
+    }
+
     private static bool IsRetryable(HttpStatusCode statusCode) =>
         statusCode == HttpStatusCode.RequestTimeout ||
         (int)statusCode == 429 ||
@@ -777,6 +841,14 @@ internal sealed class TelemetryClient : IDisposable
 
         return TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 250));
     }
+
+    private static bool IsBasicEvent(string eventName) => BasicEventNames.Contains(eventName);
+
+    private static bool IsEnhancedEvent(string eventName) => eventName is
+        TelemetryEventNames.SessionSummary or
+        TelemetryEventNames.FeatureUsed or
+        TelemetryEventNames.ActivationFailure or
+        TelemetryEventNames.EntitlementChecked;
 
     private static string? GetOptOutScope(bool previousAnalytics, bool previousCrash, bool analytics, bool crash)
     {
@@ -923,6 +995,7 @@ internal sealed class TelemetryStateDocument
     public string InstanceId { get; set; } = Guid.NewGuid().ToString();
     public bool AnalyticsConsent { get; set; }
     public bool CrashConsent { get; set; }
+    public bool AllUploadsDisabled { get; set; }
     public string PolicyVersion { get; set; } = TelemetryBuild.PolicyVersion;
     public DateTimeOffset? FirstObservedAt { get; set; }
     public bool FirstRunRecorded { get; set; }

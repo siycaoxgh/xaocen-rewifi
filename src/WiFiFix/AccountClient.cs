@@ -482,14 +482,13 @@ internal sealed class AccountSessionManager : IDisposable
                 SetStatus("设备已批准，正在获取账号信息…");
                 var tokenResponse = await _client.ExchangeDeviceTokenAsync(token.DeviceCode, linked.Token).ConfigureAwait(false);
                 var profile = await _client.GetAccountAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
-                var entitlements = await TryGetEntitlementsAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(devicePublicKey))
                 {
                     await _client.RegisterOnlineDeviceAsync(tokenResponse.AccessToken, devicePublicKey, linked.Token).ConfigureAwait(false);
                 }
                 _credentialStore.WriteRefreshToken(tokenResponse.RefreshToken);
                 _session = new AccountSession(tokenResponse.AccessToken, tokenResponse.ExpiresIn, profile);
-                _entitlements = entitlements;
+                _entitlements = null;
                 PublishAuthorizationProgress(new DeviceAuthorizationProgress(
                     DeviceAuthorizationPhase.Connected,
                     startedAt,
@@ -546,7 +545,6 @@ internal sealed class AccountSessionManager : IDisposable
             {
                 var token = await _client.RefreshDeviceSessionAsync(refreshToken, linked.Token).ConfigureAwait(false);
                 var profile = await _client.GetAccountAsync(token.AccessToken, linked.Token).ConfigureAwait(false);
-                var entitlements = await TryGetEntitlementsAsync(token.AccessToken, linked.Token).ConfigureAwait(false);
                 try
                 {
                     var devicePublicKey = _devicePublicKeyProvider?.Invoke();
@@ -561,7 +559,7 @@ internal sealed class AccountSessionManager : IDisposable
                 }
                 _credentialStore.WriteRefreshToken(token.RefreshToken);
                 _session = new AccountSession(token.AccessToken, token.ExpiresIn, profile);
-                _entitlements = entitlements;
+                _entitlements = null;
                 SetStatus("XAOCEN Account 会话已恢复");
                 AppLogger.Info("XAOCEN Account 会话恢复成功。");
                 return true;

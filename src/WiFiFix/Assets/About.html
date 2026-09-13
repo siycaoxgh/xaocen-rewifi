@@ -54,12 +54,12 @@
       <img src="xaocen-rewifi.png" alt="XAOCEN ReWiFi 无线重连工具">
       <div class="hero-content">
         <h1>XAOCEN ReWiFi</h1>
-        <div class="subtitle">无线重连工具 · Version v2.0</div>
+        <div class="subtitle">无线重连工具 · Version v2.3</div>
         <p class="lead">用于持续监测 Windows 当前 Wi‑Fi 状态，并在网络异常时自动重启 Wi‑Fi 与重新连接。</p>
         <p>专注于稳定、安静的后台运行，让重要的网络任务保持顺畅进行。</p>
         <p>XAOCEN ReWiFi 是一个轻量的 Windows Wi‑Fi 自动恢复托盘工具。它持续读取 Windows 自己维护的网络状态，在指定 Wi‑Fi 出现持续异常时，自动关闭并重新开启 Wi‑Fi 网卡，然后连接 Windows 已保存的 Wi‑Fi Profile。</p>
-        <p>程序不保存 Wi‑Fi 密码，不管理代理软件。XAOCEN Account 授权、权益查询和离线授权检查均按正式协议处理。普通 v2.0 发布构建不上传运行数据；遥测只在单独的测试构建中启用，并且需要用户分别同意匿名使用统计和匿名崩溃报告。</p>
-        <p><strong>账号与离线授权：</strong>v2.0 在同一版本内按“在线优先、网络不可用时本地回退”策略接入 XAOCEN Account。设置中的“账号与离线授权”卡片只保留一个授权中心入口，并显示账号会话、最近一次授权检查模式和在线/离线授权有效期；授权中心支持在线设备授权、会话恢复、刷新、退出、撤销、ReWiFi 权益查询，以及离线授权文件的本地签名校验和断网回退。登录由 XAOCEN 官网完成，客户端不重复实现邮箱或第三方登录。v1.5 归档版保持不变。</p>
+        <p>程序不保存 Wi‑Fi 密码，不管理代理软件。XAOCEN Account 仅提供可选的账号登录、会话恢复、退出和设备撤销；本版本不提供会员、权益查询、离线激活或摄像头扫码。发布构建使用正式遥测入口，测试构建可切换到隔离测试环境；基础运行统计默认启用，增强匿名分析与匿名崩溃报告独立设置，崩溃报告默认关闭。用户可明确选择禁止所有数据上传。</p>
+        <p><strong>永久免费：</strong>全部网络恢复功能无需登录或激活。账号中心提供可选登录、退出和撤销，方便账号识别和反馈。断网时可直接使用。</p>
       </div>
     </section>
 
@@ -67,10 +67,10 @@
     <p>程序启动后隐藏主窗口，仅在 Windows 托盘运行：</p>
     <div class="flow"><div class="step">监测指定 Wi‑Fi</div><div class="step">发现网络异常</div><div class="step">重启 Wi‑Fi 网卡</div><div class="step">重新连接网络</div></div>
     <p>恢复完成后进入 30 秒冷却并继续监听。设置窗口使用 ReWiFi 图标和流程说明，帮助用户直观看到程序的工作方式。</p>
-    <div class="card-grid"><div class="card"><strong>后台运行</strong>启动后常驻 Windows 托盘，不需要一直打开窗口。</div><div class="card"><strong>自动恢复</strong>异常持续设定时间后，自动关闭、开启并重新连接 Wi‑Fi。</div><div class="card"><strong>安全授权</strong>访问令牌仅驻留内存，刷新令牌和离线私钥使用 Windows Credential Manager 保存。</div></div>
+    <div class="card-grid"><div class="card"><strong>后台运行</strong>启动后常驻 Windows 托盘，不需要一直打开窗口。</div><div class="card"><strong>自动恢复</strong>异常持续设定时间后，自动关闭、开启并重新连接 Wi‑Fi。</div><div class="card"><strong>可选账号</strong>访问令牌仅驻留内存，刷新令牌和设备登记密钥由 Windows Credential Manager 保护。</div></div>
 
     <h2>环境</h2>
-    <ul><li>Windows 10 / Windows 11</li><li>.NET 10 SDK</li><li>WinForms</li></ul>
+    <ul><li>Windows 10 / Windows 11</li><li>WinForms</li><li>.NET 10 SDK（仅从源码构建需要）</li></ul>
     <p>程序需要管理员权限，因为恢复流程需要启用或禁用 Wi‑Fi 网卡。开机启动使用 Windows 任务计划程序，并以最高权限运行。</p>
 
     <h2>跨电脑使用要求</h2>
@@ -81,18 +81,16 @@
     <h2>编译</h2>
     <pre><code>dotnet build .\XAOCEN-WiFiFix.sln -c Release
 
-dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\build\v2.0-publish</code></pre>
-    <p>输出文件名为 <code>XAOCEN.ReWiFi.exe</code>。独立版本约 94 MB，目标电脑不需要另外安装 .NET 10。</p>
+dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\build\v2.3-release</code></pre>
+    <p>输出文件名为 <code>XAOCEN-ReWiFi.exe</code>。自包含便携版本，目标电脑不需要另外安装 .NET 10。</p>
 
+    <h2>使用与协议</h2><p>用户协议和隐私说明可从程序托盘菜单或设置页面查看。在线入口由客户端根据网络状态打开官网版本或内置副本。</p>
     <h2>使用</h2>
-    <ol><li>先通过 Windows Wi‑Fi 菜单连接一次目标网络，让 Windows 保存该 Wi‑Fi Profile。</li><li>以管理员身份运行 <code>XAOCEN.ReWiFi.exe</code>。</li><li>右键托盘图标打开“设置”；设置窗口会在任务栏显示独立的 ReWiFi 图标，便于从其他窗口后方找回。</li><li>在“网络恢复”区域点击“自动识别当前连接”，程序会自动填入当前 SSID 和 Wi‑Fi 网卡名称。</li><li>保存设置即可。默认异常等待 5 秒、恢复冷却 30 秒、自动恢复和开机启动均开启。</li></ol>
+    <ol><li>先通过 Windows Wi‑Fi 菜单连接一次目标网络，让 Windows 保存该 Wi‑Fi Profile。</li><li>以管理员身份运行 <code>XAOCEN-ReWiFi.exe</code>。</li><li>右键托盘图标打开“设置”；设置窗口会在任务栏显示独立的 ReWiFi 图标，便于从其他窗口后方找回。</li><li>在“网络恢复”区域点击“自动识别当前连接”，程序会自动填入当前 SSID 和 Wi‑Fi 网卡名称。</li><li>保存设置即可。默认异常等待 5 秒、恢复冷却 30 秒、自动恢复和开机启动均开启。</li></ol>
 
-    <p>托盘菜单顶部保留产品名称、版本、状态、立即恢复、自动恢复和开机启动；其余入口已分组为“设置”“账号与离线授权”“文档与帮助”和“帮助与反馈”。自动选择文档仅在首次启动时使用，不再作为重复按钮出现。设置页面将账号授权、网络恢复、帮助与文档分别集中展示。</p>
+    <p>托盘菜单顶部保留产品名称、版本、状态、立即恢复、自动恢复和开机启动；其余入口已分组为“设置”“账号中心”“文档与帮助”和“帮助与反馈”。“产品介绍与使用帮助”会在在线时打开官网，无法联网时打开内置离线副本。每次构建会自动生成内部构建号，用于识别同一公开版本的新构建，但普通界面仍只显示 2.3。设置窗口与授权中心统一使用相同的窗口尺寸、微软雅黑字体、边距和按钮样式，并按 DPI 自动缩放；设置页面将账号授权、网络恢复、帮助与文档分别集中展示。</p>
 
-    <h2>XAOCEN Account 与离线授权</h2>
-    <p>设置窗口进入“账号与离线授权”，在线时使用 <code>productId=rewifi</code>、<code>platform=windows-x64</code> 完成设备授权，并查询 ReWiFi 产品权益。授权等待期间会显示授权截止时间、上次/下一次轮询时间、轮询次数和剩余时间；成功后显示“XAOCEN Account 已连接”。账号会话与离线授权联网校验是两种独立状态；设置页和授权中心会同步显示最近一次检查模式、权益到期、下次联网检查和最迟重新授权日期。网络不可用时，客户端自动使用本地签名校验。</p>
-    <p>离线授权支持显示设备公钥二维码、导入 <code>.xaocen-license</code> 文件或粘贴 <code>compactLicense</code>。Account 签发后，ReWiFi 也可以通过摄像头扫描授权二维码。客户端内置 <code>primary</code> 公钥，在断网时进行本地签名、产品、平台、设备和时间策略校验；网络恢复后再调用 Account 在线检查或重新签发。</p>
-
+    <h2>可选账号登录</h2><p>登录由 XAOCEN Account 官网完成，访问令牌只保存在内存，刷新令牌保存在 Windows Credential Manager。登录失败、退出账号或断网不影响网络恢复。反馈网页可能需要另行登录。本版本不提供会员、离线激活和摄像头扫码。</p>
     <h2>网络判断</h2>
     <p>程序每 2 秒读取指定无线网卡的本地 Windows 状态，正常时不主动访问互联网。Windows 状态异常持续设置的秒数后，程序才会并行执行两个轻量 HTTPS 探测：</p>
     <ul><li>Google 与百度都可达：认为外网正常，不重启 Wi‑Fi。</li><li>一个可达、一个不可达：可能是代理规则或代理链路问题，不重启 Wi‑Fi。</li><li>两个都不可达：认为实体 Wi‑Fi 可能异常，执行一次 Wi‑Fi 恢复。</li><li>Wi‑Fi 物理断开、SSID 消失或网卡禁用：直接进入恢复流程。</li></ul>
@@ -101,12 +99,11 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
     <h2>日志与配置</h2>
     <p>托盘菜单提供“查看运行日志”。</p>
     <p>日志文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\runtime.log</code></pre>
-    <p>遥测测试构建的匿名状态和待上传队列：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\state.json
+    <p>匿名遥测状态和待上传队列：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\state.json
 %LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\queue.json</code></pre>
-    <p>遥测不要求 XAOCEN Account 登录，不上传账号、令牌、授权内容、SSID、网卡名称、MAC、IP、完整日志或文件内容。拒绝统计不会影响 Wi‑Fi 恢复、账号授权或离线运行。</p>
+    <p>基础运行统计仅记录首次运行、启动、版本更新和核心激活规模，不上传系统版本、架构、网络或设备详情。遥测不要求 XAOCEN Account 登录，不上传账号、令牌、授权内容、SSID、网卡名称、MAC、IP、完整日志或文件内容。增强分析和崩溃报告可分别关闭；选择禁止所有数据上传后不会产生、缓存或发送任何遥测事件。</p>
     <p>配置文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\config.json</code></pre>
-    <p>离线授权文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\offline-license.xaocen-license</code></pre>
-    <p>账号刷新令牌和离线设备私钥分别保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。从 v1.7 升级到 v1.8.x 时路径与凭据名称保持不变，新版本会自动沿用；替换 EXE 不会清空授权。</p>
+    <p>账号刷新令牌和设备登记密钥保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。替换 EXE 不会清空账号会话凭据；历史版本留下的 <code>offline-license.xaocen-license</code> 文件不会被自动删除，但 v2.3 不读取它，也不以它判断功能可用性。</p>
     <p>本地产品介绍页面：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\XAOCEN-ReWiFi-介绍.html</code></pre>
 
     <h2>限制</h2>
@@ -135,7 +132,7 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
     <ul><li>基础功能：托盘常驻、单实例、配置文件、管理员权限、Wi‑Fi 自动关闭/开启/重连、异常等待、恢复冷却、开机启动。</li></ul>
 
     <h2>项目与更新</h2>
-    <p><a href="https://github.com/siycaoxgh/xaocen-rewifi">打开 GitHub 项目主页和更新记录</a></p>
+    <p>项目更新和问题反馈请使用程序托盘菜单中的对应入口。</p>
     <footer><div>开发：XAOCEN STUDIO</div><div>© 2026 XAOCEN · All Rights Reserved.</div></footer>
   </main>
 </body>

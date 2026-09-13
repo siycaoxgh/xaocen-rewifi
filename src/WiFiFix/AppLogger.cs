@@ -13,11 +13,16 @@ public static class AppLogger
         ?? Assembly.GetEntryAssembly()?.GetName().Version?.ToString()
         ?? "unknown";
 
+    public static string BuildRevision =>
+        Assembly.GetEntryAssembly()?.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, "XAOCEN-BuildRevision", StringComparison.Ordinal))?.Value
+        ?? "0";
+
     public static string LogPath => LogFilePath;
 
     public static void StartSession()
     {
-        Info($"启动 v{Version}; PID={Environment.ProcessId}; 路径={Environment.ProcessPath}");
+        Info($"启动 v{Version}; 构建号={BuildRevision}; PID={Environment.ProcessId}; 路径={Environment.ProcessPath}");
     }
 
     public static void Info(string message) => Write("INFO", message);

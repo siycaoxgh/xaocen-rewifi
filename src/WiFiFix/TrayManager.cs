@@ -41,14 +41,20 @@ public sealed class TrayManager : IDisposable
 
         var settingsItem = new ToolStripMenuItem("设置");
         settingsItem.Click += (_, _) => SettingsRequested?.Invoke();
-        var accountItem = new ToolStripMenuItem("账号与离线授权");
+        var accountItem = new ToolStripMenuItem("账号中心（可选登录）");
         accountItem.Click += (_, _) => AccountRequested?.Invoke();
-        var onlineDocsItem = new ToolStripMenuItem("在线文档");
-        onlineDocsItem.Click += (_, _) => OnlineDocumentationRequested?.Invoke();
-        var localDocsItem = new ToolStripMenuItem("本地文档");
-        localDocsItem.Click += (_, _) => LocalDocumentationRequested?.Invoke();
+        var documentationItem = new ToolStripMenuItem("产品介绍与使用帮助");
+        documentationItem.ToolTipText = "在线时打开官网产品页，无法联网时打开内置离线副本。";
+        documentationItem.Click += (_, _) => DocumentationRequested?.Invoke();
         var documentationMenu = new ToolStripMenuItem("文档与帮助");
-        documentationMenu.DropDownItems.AddRange([onlineDocsItem, localDocsItem]);
+        documentationMenu.DropDownItems.Add(documentationItem);
+        var termsItem = new ToolStripMenuItem("用户协议（在线优先）");
+        termsItem.ToolTipText = "优先打开官网协议，官网暂不可用时打开内置副本。";
+        termsItem.Click += async (_, _) => await DocumentationRouter.OpenLegalAsync("terms");
+        var privacyItem = new ToolStripMenuItem("隐私说明（在线优先）");
+        privacyItem.ToolTipText = "优先打开官网隐私说明，官网暂不可用时打开内置副本。";
+        privacyItem.Click += async (_, _) => await DocumentationRouter.OpenLegalAsync("privacy");
+        documentationMenu.DropDownItems.AddRange([new ToolStripSeparator(), termsItem, privacyItem]);
         var feedbackItem = new ToolStripMenuItem("报告问题");
         feedbackItem.Click += (_, _) => FeedbackRequested?.Invoke();
         var diagnosticItem = new ToolStripMenuItem("复制脱敏诊断信息");
@@ -86,8 +92,7 @@ public sealed class TrayManager : IDisposable
     public event Action<bool>? AutoStartChanged;
     public event Action? SettingsRequested;
     public event Action? AccountRequested;
-    public event Action? OnlineDocumentationRequested;
-    public event Action? LocalDocumentationRequested;
+    public event Action? DocumentationRequested;
     public event Action? FeedbackRequested;
     public event Action? DiagnosticRequested;
     public event Action? ExitRequested;
@@ -117,6 +122,25 @@ public sealed class TrayManager : IDisposable
             _notifyIcon.ShowBalloonTip(5000);
         });
     }
+
+    internal Task<T> InvokeOnUiAsync<T>(Func<T> action)
+    {
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        RunOnUi(() =>
+        {
+            try
+            {
+                completion.TrySetResult(action());
+            }
+            catch (Exception ex)
+            {
+                completion.TrySetException(ex);
+            }
+        });
+        return completion.Task;
+    }
+
+    internal void PostToUi(Action action) => RunOnUi(action);
 
     public void Dispose()
     {
