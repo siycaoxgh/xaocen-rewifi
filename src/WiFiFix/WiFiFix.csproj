@@ -5,7 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>XAOCEN.ReWiFi</AssemblyName>
+    <AssemblyName>XAOCEN-ReWiFi</AssemblyName>
     <Product>XAOCEN ReWiFi</Product>
     <AssemblyTitle>XAOCEN ReWiFi</AssemblyTitle>
     <Title>XAOCEN ReWiFi</Title>
@@ -18,35 +18,32 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>2.0</Version>
-    <InformationalVersion>2.0</InformationalVersion>
+    <Version>2.3</Version>
+    <InformationalVersion>2.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
+    <AssemblyVersion>2.3.0.0</AssemblyVersion>
+    <FileVersion>2.3.0.0</FileVersion>
+    <!-- A build-only revision keeps same public versions distinguishable during portable upgrades. -->
+    <BuildRevision Condition="'$(BuildRevision)' == ''">$([System.DateTime]::UtcNow.Ticks)</BuildRevision>
     <ApplicationIcon>Assets\xaocen-rewifi_rounded.ico</ApplicationIcon>
     <DebugType>none</DebugType>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(TelemetryTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);TELEMETRY_TEST</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>XAOCEN-BuildRevision</_Parameter1>
+      <_Parameter2>$(BuildRevision)</_Parameter2>
+    </AssemblyAttribute>
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.1" />
-    <PackageReference Include="QRCoder" Version="1.6.0" />
-    <PackageReference Include="OpenCvSharp4" Version="4.10.0.20241108" />
-    <PackageReference Include="OpenCvSharp4.Extensions" Version="4.10.0.20241108" />
-    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20241108" GeneratePathProperty="true" ExcludeAssets="runtime" />
     <EmbeddedResource Include="Assets\xaocen-rewifi_rounded.png" />
     <EmbeddedResource Include="Assets\About.html" />
+    <EmbeddedResource Include="Assets\terms.html" />
+    <EmbeddedResource Include="Assets\privacy.html" />
     <EmbeddedResource Include="Assets\xaocen-rewifi.png" />
-    <!-- ReWiFi only captures Windows webcams through DirectShow/Media Foundation.
-         The optional FFmpeg backend is not used and adds about 25 MB to the package. -->
-    <Content Include="$(PkgOpenCvSharp4_runtime_win)\runtimes\win-x64\native\OpenCvSharpExtern.dll"
-             Link="OpenCvSharpExtern.dll"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="Always" />
+    <Compile Remove="QrScannerForm.cs;QrCodeForm.cs;QrCodeService.cs" />
   </ItemGroup>
-  <Target Name="RemoveUnusedOpenCvFfmpegFromPublish" AfterTargets="ComputeFilesToPublish">
-    <ItemGroup>
-      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                             Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'opencv_videoio_ffmpeg4100_64.dll'" />
-    </ItemGroup>
-  </Target>
+
 </Project>

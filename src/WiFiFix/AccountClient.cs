@@ -389,6 +389,7 @@ internal sealed class AccountSessionManager : IDisposable
     internal AccountClient Client => _client;
     public event Action<string>? StatusChanged;
     public event Action<DeviceAuthorizationProgress>? AuthorizationProgressChanged;
+    public event Action<AccountAuthorizationResult>? AuthorizationResult;
 
     public async Task<AccountProfile> AuthorizeAsync(CancellationToken cancellationToken = default)
     {
@@ -481,14 +482,13 @@ internal sealed class AccountSessionManager : IDisposable
                 SetStatus("设备已批准，正在获取账号信息…");
                 var tokenResponse = await _client.ExchangeDeviceTokenAsync(token.DeviceCode, linked.Token).ConfigureAwait(false);
                 var profile = await _client.GetAccountAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
-                var entitlements = await TryGetEntitlementsAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(devicePublicKey))
                 {
                     await _client.RegisterOnlineDeviceAsync(tokenResponse.AccessToken, devicePublicKey, linked.Token).ConfigureAwait(false);
                 }
                 _credentialStore.WriteRefreshToken(tokenResponse.RefreshToken);
                 _session = new AccountSession(tokenResponse.AccessToken, tokenResponse.ExpiresIn, profile);
-                _entitlements = entitlements;
+                _entitlements = null;
                 PublishAuthorizationProgress(new DeviceAuthorizationProgress(
                     DeviceAuthorizationPhase.Connected,
                     startedAt,
@@ -498,6 +498,7 @@ internal sealed class AccountSessionManager : IDisposable
                     pollCount));
                 SetStatus("XAOCEN Account 已连接");
                 AppLogger.Info("XAOCEN Account 在线扫码授权完成，账号信息验证成功。");
+                PublishAuthorizationResult(new AccountAuthorizationResult(true, "online", null));
                 return profile;
             }
 
@@ -514,6 +515,12 @@ internal sealed class AccountSessionManager : IDisposable
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             SetStatus("XAOCEN Account 授权已取消");
+            PublishAuthorizationResult(new AccountAuthorizationResult(false, "online", "cancelled"));
+            throw;
+        }
+        catch (Exception exception)
+        {
+            PublishAuthorizationResult(new AccountAuthorizationResult(false, "online", GetAuthorizationErrorCode(exception)));
             throw;
         }
         finally
@@ -538,7 +545,6 @@ internal sealed class AccountSessionManager : IDisposable
             {
                 var token = await _client.RefreshDeviceSessionAsync(refreshToken, linked.Token).ConfigureAwait(false);
                 var profile = await _client.GetAccountAsync(token.AccessToken, linked.Token).ConfigureAwait(false);
-                var entitlements = await TryGetEntitlementsAsync(token.AccessToken, linked.Token).ConfigureAwait(false);
                 try
                 {
                     var devicePublicKey = _devicePublicKeyProvider?.Invoke();
@@ -553,7 +559,7 @@ internal sealed class AccountSessionManager : IDisposable
                 }
                 _credentialStore.WriteRefreshToken(token.RefreshToken);
                 _session = new AccountSession(token.AccessToken, token.ExpiresIn, profile);
-                _entitlements = entitlements;
+                _entitlements = null;
                 SetStatus("XAOCEN Account 会话已恢复");
                 AppLogger.Info("XAOCEN Account 会话恢复成功。");
                 return true;
@@ -651,6 +657,27 @@ internal sealed class AccountSessionManager : IDisposable
         AppLogger.Info($"账号状态：{status}");
     }
 
+    private void PublishAuthorizationResult(AccountAuthorizationResult result)
+    {
+        try
+        {
+            AuthorizationResult?.Invoke(result);
+        }
+        catch (Exception exception)
+        {
+            AppLogger.Warning($"授权统计事件处理失败：{exception.GetType().Name}");
+        }
+    }
+
+    private static string GetAuthorizationErrorCode(Exception exception) => exception switch
+    {
+        AccountHttpException accountException when !string.IsNullOrWhiteSpace(accountException.Code) => accountException.Code!,
+        AccountHttpException accountException => $"http_{accountException.StatusCode}",
+        AccountAuthorizationException => "authorization_failed",
+        AccountProtocolException => "protocol_error",
+        _ => "client_error"
+    };
+
     private async Task<IReadOnlyList<AccountEntitlement>?> TryGetEntitlementsAsync(
         string accessToken,
         CancellationToken cancellationToken)
@@ -718,6 +745,11 @@ internal readonly record struct AccountTokenResponse(
     string AccessToken,
     string RefreshToken,
     TimeSpan ExpiresIn);
+
+internal readonly record struct AccountAuthorizationResult(
+    bool Success,
+    string Mode,
+    string? ErrorCode);
 
 internal readonly record struct AccountProfile(
     string? Id,

@@ -15,6 +15,7 @@ public sealed class AppConfig
     public bool EnableConnectivityProbe { get; set; } = true;
     public int ConnectivityProbeTimeoutSeconds { get; set; } = 4;
     public bool WelcomeShown { get; set; }
+    public string? LegalNoticeVersion { get; set; }
 
     public static string DirectoryPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XAOCEN ReWiFi");
@@ -72,6 +73,7 @@ public sealed class AppConfig
         AutoStart = AutoStart,
         EnableConnectivityProbe = EnableConnectivityProbe,
         ConnectivityProbeTimeoutSeconds = ConnectivityProbeTimeoutSeconds,
+        LegalNoticeVersion = LegalNoticeVersion,
         WelcomeShown = WelcomeShown
     };
 

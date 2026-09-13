@@ -15,23 +15,32 @@ public sealed class SettingsForm : Form
     private readonly WifiController _wifiController;
     private readonly AccountSessionManager _accountSessionManager;
     private readonly OfflineAuthorizationManager _offlineAuthorizationManager;
+    private readonly TelemetryClient _telemetry;
     private readonly Action<AppConfig> _saveAction;
     private readonly Label _accountSummary = CreateSummaryLabel();
     private readonly Label _authorizationSummary = CreateSummaryLabel();
+    private readonly CheckBox _analyticsConsent = new();
+    private readonly CheckBox _crashConsent = new();
+    private readonly CheckBox _disableAllTelemetry = new();
+    private readonly Label _telemetryStatus = CreateSummaryLabel();
 
     internal SettingsForm(
         AppConfig config,
         WifiController wifiController,
         AccountSessionManager accountSessionManager,
         OfflineAuthorizationManager offlineAuthorizationManager,
+        TelemetryClient telemetry,
         Action<AppConfig> saveAction)
     {
         _initialConfig = config.Clone();
         _wifiController = wifiController;
         _accountSessionManager = accountSessionManager;
         _offlineAuthorizationManager = offlineAuthorizationManager;
+        _telemetry = telemetry;
         _saveAction = saveAction;
         Text = $"{ProductInfo.ProductName} 设置";
+        Font = new Font("Microsoft YaHei UI", 9F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Color.FromArgb(247, 249, 251);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
@@ -39,34 +48,36 @@ public sealed class SettingsForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
         Icon = LoadApplicationIcon();
-        ClientSize = new Size(820, 720);
+        ClientSize = new Size(1040, 810);
         _ssidTextBox.Text = _initialConfig.TargetSsid;
         _adapterTextBox.Text = _initialConfig.AdapterName;
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(14),
+            Padding = new Padding(14, 10, 14, 14),
             ColumnCount = 1,
-            RowCount = 5
+            RowCount = 6,
+            AutoScroll = true
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 198));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
-        overview.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116));
+        overview.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         overview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         overview.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         overview.Controls.Add(new PictureBox
         {
             Image = LoadProductImage(),
             SizeMode = PictureBoxSizeMode.Zoom,
             Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 16, 0)
+            Margin = new Padding(0, 2, 12, 2)
         }, 0, 0);
         overview.SetRowSpan(overview.Controls[0], 2);
         overview.Controls.Add(new Label
@@ -90,7 +101,7 @@ public sealed class SettingsForm : Form
             Text = "GitHub 更新页面",
             AutoSize = true,
             Anchor = AnchorStyles.Left,
-            Margin = new Padding(12, 6, 0, 0),
+            Margin = new Padding(8, 3, 0, 0),
             LinkColor = Color.FromArgb(8, 123, 192),
             ActiveLinkColor = Color.FromArgb(20, 196, 211),
             VisitedLinkColor = Color.FromArgb(8, 123, 192)
@@ -162,6 +173,7 @@ public sealed class SettingsForm : Form
         layout.Controls.Add(settingsGroup, 0, 2);
 
         layout.Controls.Add(CreateHelpGroup(), 0, 3);
+        layout.Controls.Add(CreateTelemetryGroup(), 0, 4);
 
         var buttonBar = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
         var saveButton = new Button
@@ -177,7 +189,7 @@ public sealed class SettingsForm : Form
         saveButton.Click += SaveButtonOnClick;
         buttonBar.Controls.Add(saveButton);
         buttonBar.Resize += (_, _) => saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
-        layout.Controls.Add(buttonBar, 0, 4);
+        layout.Controls.Add(buttonBar, 0, 5);
 
         Controls.Add(layout);
         AcceptButton = saveButton;
@@ -188,10 +200,12 @@ public sealed class SettingsForm : Form
         };
         _accountSessionManager.StatusChanged += AccountStateChanged;
         _offlineAuthorizationManager.StateChanged += AuthorizationStateChanged;
+        _telemetry.StatusChanged += TelemetryStateChanged;
         FormClosed += (_, _) =>
         {
             _accountSessionManager.StatusChanged -= AccountStateChanged;
             _offlineAuthorizationManager.StateChanged -= AuthorizationStateChanged;
+            _telemetry.StatusChanged -= TelemetryStateChanged;
         };
     }
 
@@ -199,7 +213,7 @@ public sealed class SettingsForm : Form
     {
         var group = new GroupBox
         {
-            Text = "账号与离线授权",
+            Text = "永久免费 · 可选登录",
             Dock = DockStyle.Fill,
             Padding = new Padding(10),
             BackColor = Color.FromArgb(255, 252, 242),
@@ -209,30 +223,31 @@ public sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 2,
-            Margin = new Padding(0)
+            RowCount = 1,
+            Margin = new Padding(0),
+            Padding = new Padding(0, 8, 0, 0)
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
 
         table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary), 0, 0);
-        table.Controls.Add(CreateSummaryPanel("离线授权状态", _authorizationSummary), 1, 0);
+        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 0);
 
-        var actions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            WrapContents = false,
-            Margin = new Padding(0),
-            Padding = new Padding(0, 2, 0, 0)
-        };
-        var centerButton = CreateSectionButton("打开授权中心", Color.FromArgb(255, 189, 74));
+        var centerButton = CreateSectionButton("打开账号中心", Color.FromArgb(255, 189, 74));
+        centerButton.AutoSize = false;
+        centerButton.Size = centerButton.GetPreferredSize(Size.Empty);
+        centerButton.Height = 30;
+        centerButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         centerButton.Click += (_, _) => OpenAuthorizationCenter();
-        actions.Controls.Add(centerButton);
-        table.Controls.Add(actions, 0, 1);
-        table.SetColumnSpan(actions, 2);
         group.Controls.Add(table);
+        group.Controls.Add(centerButton);
+        group.Resize += (_, _) =>
+        {
+            centerButton.Left = Math.Max(180, group.ClientSize.Width - centerButton.Width - 12);
+            centerButton.Top = 6;
+            centerButton.BringToFront();
+        };
         return group;
     }
 
@@ -253,10 +268,8 @@ public sealed class SettingsForm : Form
             Margin = new Padding(0),
             Padding = new Padding(0, 4, 0, 0)
         };
-        var onlineDocsButton = CreateSectionButton("在线文档");
-        onlineDocsButton.Click += (_, _) => DocumentationRouter.OpenOnline();
-        var localDocsButton = CreateSectionButton("本地文档");
-        localDocsButton.Click += (_, _) => DocumentationRouter.OpenLocal();
+        var documentationButton = CreateSectionButton("产品介绍与使用帮助");
+        documentationButton.Click += async (_, _) => await DocumentationRouter.OpenAsync();
         var supportButton = CreateSectionButton("报告问题");
         supportButton.Click += (_, _) =>
         {
@@ -265,11 +278,116 @@ public sealed class SettingsForm : Form
         };
         var logButton = CreateSectionButton("运行日志");
         logButton.Click += (_, _) => OpenRunLog();
-        actions.Controls.Add(onlineDocsButton);
-        actions.Controls.Add(localDocsButton);
+        actions.Controls.Add(documentationButton);
         actions.Controls.Add(supportButton);
         actions.Controls.Add(logButton);
+        var termsButton = CreateSectionButton("用户协议");
+        termsButton.Click += async (_, _) => await DocumentationRouter.OpenLegalAsync("terms");
+        var privacyButton = CreateSectionButton("隐私说明");
+        privacyButton.Click += async (_, _) => await DocumentationRouter.OpenLegalAsync("privacy");
+        actions.Controls.Add(termsButton);
+        actions.Controls.Add(privacyButton);
         group.Controls.Add(actions);
+        return group;
+    }
+
+    private GroupBox CreateTelemetryGroup()
+    {
+        var group = new GroupBox
+        {
+            Text = _telemetry.GetStatus().IsTestBuild ? "隐私与统计（测试）" : "隐私与统计",
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            BackColor = Color.White,
+            ForeColor = Color.FromArgb(23, 33, 43)
+        };
+        var table = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 4,
+            Margin = new Padding(0)
+        };
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+
+        var consent = _telemetry.Consent;
+        var baseSummary = new Label
+        {
+            Text = "基础运行统计：默认启用（首次运行、启动、更新、激活）",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0)
+        };
+        table.Controls.Add(baseSummary, 0, 0);
+        table.SetColumnSpan(baseSummary, 2);
+
+        _analyticsConsent.Text = "增强匿名分析（可选）";
+        _analyticsConsent.Checked = consent.Analytics;
+        _analyticsConsent.AutoSize = true;
+        _analyticsConsent.Margin = new Padding(0);
+        _crashConsent.Text = "匿名崩溃报告（可选）";
+        _crashConsent.Checked = consent.Crash;
+        _crashConsent.AutoSize = true;
+        _crashConsent.Margin = new Padding(0);
+        _disableAllTelemetry.Text = "禁止所有统计上传";
+        _disableAllTelemetry.Checked = consent.AllUploadsDisabled;
+        _disableAllTelemetry.AutoSize = true;
+        _disableAllTelemetry.Margin = new Padding(0);
+        var enabled = _telemetry.GetStatus().IsTestBuild;
+        _analyticsConsent.Enabled = enabled && !consent.AllUploadsDisabled;
+        _crashConsent.Enabled = enabled && !consent.AllUploadsDisabled;
+        _disableAllTelemetry.Enabled = enabled;
+        table.Controls.Add(_analyticsConsent, 0, 1);
+        table.Controls.Add(_crashConsent, 1, 1);
+        table.Controls.Add(_disableAllTelemetry, 0, 2);
+        _disableAllTelemetry.CheckedChanged += (_, _) =>
+        {
+            var controlsEnabled = enabled && !_disableAllTelemetry.Checked;
+            _analyticsConsent.Enabled = controlsEnabled;
+            _crashConsent.Enabled = controlsEnabled;
+        };
+
+        _telemetryStatus.Text = _telemetry.StatusText;
+        _telemetryStatus.Font = new Font("Microsoft YaHei UI", 8.5F);
+        _telemetryStatus.Margin = new Padding(6, 1, 0, 1);
+        table.Controls.Add(_telemetryStatus, 2, 0);
+        table.SetRowSpan(_telemetryStatus, 3);
+
+        var resetButton = CreateSectionButton("重置匿名标识并删除待上传数据");
+        resetButton.Height = 26;
+        resetButton.Click += (_, _) =>
+        {
+            if (MessageBox.Show(this, "这将删除本地待上传统计并生成新的匿名标识，是否继续？", ProductInfo.ProductName,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            {
+                return;
+            }
+
+            _telemetry.ResetInstanceId();
+            _telemetryStatus.Text = _telemetry.StatusText;
+        };
+        table.Controls.Add(resetButton, 1, 2);
+
+        var privacyNote = new Label
+        {
+            Text = "基础统计仅记录首次运行、启动、更新和核心激活；不包含系统、网络或设备详细信息。",
+            AutoSize = false,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Microsoft YaHei UI", 8.5F),
+            ForeColor = Color.FromArgb(80, 92, 104),
+            Margin = new Padding(0)
+        };
+        table.Controls.Add(privacyNote, 0, 3);
+        table.SetColumnSpan(privacyNote, 3);
+        group.Controls.Add(table);
         return group;
     }
 
@@ -321,6 +439,7 @@ public sealed class SettingsForm : Form
 
         try
         {
+            _telemetry.SetConsent(_analyticsConsent.Checked, _crashConsent.Checked, _disableAllTelemetry.Checked);
             _saveAction(config);
             DialogResult = DialogResult.OK;
             Close();
@@ -343,7 +462,7 @@ public sealed class SettingsForm : Form
         var session = _accountSessionManager.CurrentSession;
         if (session is null)
         {
-            _accountSummary.Text = "状态：未连接\n未保存或未恢复账号会话。\n离线授权仍可独立使用。";
+            _accountSummary.Text = "状态：未登录\n登录可选，全部功能可正常使用。";
             _accountSummary.ForeColor = Color.FromArgb(80, 92, 104);
         }
         else
@@ -353,50 +472,42 @@ public sealed class SettingsForm : Form
                 : !string.IsNullOrWhiteSpace(session.Value.Profile.DisplayName)
                     ? session.Value.Profile.DisplayName
                     : "账号信息已验证";
-            var entitlement = _accountSessionManager.CurrentEntitlements?.FirstOrDefault(item =>
-                string.Equals(item.ProductId, ProductInfo.AccountProductId, StringComparison.OrdinalIgnoreCase));
-            var entitlementText = entitlement is null || string.IsNullOrWhiteSpace(entitlement.Value.ProductId)
-                ? "ReWiFi 权益：尚未获取"
-                : $"ReWiFi 权益：{FormatEntitlementStatus(entitlement.Value.Status)} · {FormatEntitlementExpiry(entitlement.Value.ExpiresAt)}";
-            _accountSummary.Text = $"状态：已连接\n{accountName}\n{entitlementText}";
+            _accountSummary.Text = $"状态：已连接\n{accountName}\nReWiFi 永久免费";
             _accountSummary.ForeColor = Color.DarkGreen;
         }
 
-        var onlineCheck = _offlineAuthorizationManager.LastDecision?.Mode switch
-        {
-            OfflineAuthorizationMode.Online => "已通过 Account 联网核验",
-            OfflineAuthorizationMode.Offline => "网络不可用，已本地校验",
-            OfflineAuthorizationMode.Rejected => "校验未通过",
-            OfflineAuthorizationMode.NoLicense => "未配置授权文件",
-            _ => "尚未执行本次联网检查"
-        };
-        var offline = _offlineAuthorizationManager.ValidateStoredLicense();
-        if (!offline.IsValid || offline.Payload is null)
-        {
-            _authorizationSummary.Text = $"状态：{onlineCheck}\n本地授权：{offline.Message}";
-            _authorizationSummary.ForeColor = Color.Firebrick;
-            return;
-        }
-
-        var payload = offline.Payload;
-        var licenseType = FormatLicenseType(payload.LicenseType);
-        var entitlementExpiry = payload.LicenseType?.Equals("perpetual", StringComparison.OrdinalIgnoreCase) == true
-            ? "永久"
-            : payload.EntitlementExpiresAt is null ? "未单独设置" : FormatAuthorizationDate(payload.EntitlementExpiresAt);
-        _authorizationSummary.Text = string.Join(Environment.NewLine,
-            $"状态：{onlineCheck}",
-            $"本地授权：有效 · {licenseType}",
-            $"权益到期：{entitlementExpiry}",
-            $"下次联网检查：{FormatAuthorizationDate(payload.NextOnlineCheckAt)}",
-            $"最迟重新授权：{FormatAuthorizationDate(payload.HardReauthorizeAt)}");
-        _authorizationSummary.ForeColor = _offlineAuthorizationManager.LastDecision?.Mode == OfflineAuthorizationMode.Rejected
-            ? Color.Firebrick
-            : Color.DarkGreen;
+        _authorizationSummary.Text = "全部网络恢复功能永久免费。\n无需会员、激活或离线授权文件。\n断网时仍可正常使用。\n登录可方便反馈与账号识别。";
+        _authorizationSummary.ForeColor = Color.DarkGreen;
     }
 
     private void AccountStateChanged(string _) => RefreshAuthorizationSummaryOnUiThread();
 
     private void AuthorizationStateChanged() => RefreshAuthorizationSummaryOnUiThread();
+
+    private void TelemetryStateChanged() => RefreshTelemetryStatusOnUiThread();
+
+    private void RefreshTelemetryStatusOnUiThread()
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+
+        try
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(RefreshTelemetryStatusOnUiThread));
+                return;
+            }
+
+            _telemetryStatus.Text = _telemetry.StatusText;
+        }
+        catch (InvalidOperationException)
+        {
+            // The settings form can close while a background telemetry flush completes.
+        }
+    }
 
     private void RefreshAuthorizationSummaryOnUiThread()
     {
@@ -530,7 +641,10 @@ public sealed class SettingsForm : Form
         {
             Text = text,
             AutoSize = true,
-            Height = 28,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            MinimumSize = new Size(0, 30),
+            Padding = new Padding(8, 2, 8, 2),
+            Font = new Font("Microsoft YaHei UI", 9F),
             FlatStyle = FlatStyle.Flat,
             BackColor = backColor ?? Color.FromArgb(245, 247, 249)
         };

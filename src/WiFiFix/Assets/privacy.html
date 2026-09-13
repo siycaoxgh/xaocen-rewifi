@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XAOCEN ReWiFi 隐私说明</title>
+  <style>
+    :root{color-scheme:light;font-family:"Segoe UI","Microsoft YaHei",sans-serif;--brand:#FFBD4A;--brand-pressed:#D98A00;--text-primary:#17212B;--text-body:#354454;--text-secondary:#667788;--border:#DFE7EE;--divider:#EDF1F5;--bg-page:#F7F9FB;--bg-card:#FFFFFF}
+    body{margin:0;color:var(--text-body);background:var(--bg-page);line-height:1.75}
+    .page{max-width:1000px;margin:0 auto;padding:28px 34px 56px}
+    .document-hero,.document-card{border:1px solid var(--border);border-radius:18px;background:var(--bg-card);box-shadow:0 8px 28px rgba(23,33,43,.08)}
+    .document-hero{padding:30px 34px 26px;background:linear-gradient(135deg,#F0FCFD,#FFFFFF)}
+    .document-card{margin-top:18px;padding:24px 34px 30px}
+    .kicker{margin:0 0 8px;color:#1497A3;font-size:13px;letter-spacing:.14em}
+    h1{margin:0;color:var(--text-primary);font-size:30px;line-height:1.25}
+    h2{margin:30px 0 10px;color:var(--brand-pressed);font-size:22px;line-height:1.35}
+    .subtitle{margin:5px 0 12px;color:var(--brand-pressed);font-size:18px}
+    .lead{color:var(--text-primary);font-size:17px}
+    p{overflow-wrap:anywhere}footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--divider);color:var(--text-secondary);font-size:14px}
+    a{color:#087BC0}a:hover{color:#20C4D3}
+    @media(max-width:700px){.page{padding:16px}.document-hero,.document-card{padding:22px 20px}.document-card{margin-top:14px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="document-hero">
+      <p class="kicker">XAOCEN STUDIO / REWIFI</p>
+      <h1>XAOCEN ReWiFi 隐私说明</h1>
+      <div class="subtitle">无线重连工具 · Version v2.3</div>
+      <p class="lead">这份说明解释 ReWiFi 在本机和联网服务中如何处理信息。</p>
+      <p>版本：2026-09-13 · 随 2.3 发布适用</p>
+    </header>
+    <article class="document-card">
+      <h2>适用范围与联系</h2>
+      <p>本说明适用于 XAOCEN ReWiFi 2.3 便携客户端。运营方为 XAOCEN STUDIO（晓枨科技工作室）；隐私事务联系 privacy@xaocen.studio，无需登录即可通过邮箱提出问题。官网账号和反馈页面另适用官网隐私政策。</p>
+      <h2>本地网络处理</h2>
+      <p>为监测和恢复连接，客户端在本机读取网络名称（SSID）、网卡名称与连接状态，保存目标网络、恢复设置、开机启动与统计偏好。不保存 Wi-Fi 密码，使用 Windows 已保存的网络配置。核心功能永久免费，登录可选。</p>
+      <h2>本地日志并非脱敏诊断</h2>
+      <p>运行日志可能包含 SSID、网卡名称、本地文件路径及错误信息；日志默认保留本机，不作为完整日志自动上传。日志超过约 4 MiB 时按客户端轮换逻辑处理。复制脱敏诊断仅复制应用版本、Windows 版本、架构、配置存在与否及恢复开关等摘要，不包含账号、令牌、SSID、IP 或 MAC。提交日志或截图前请自行检查敏感内容。</p>
+      <h2>联网请求</h2>
+      <p>网络异常时可访问 Google、百度进行连通性探测；首次文档选择会检查官网页面可达性；登录与统计分别访问 Account 及统计接口。远端服务与网络基础设施能够在连接层看到来源 IP、时间等技术信息，不能把“不在统计事件中上传 IP”理解为网络请求完全匿名。网站访问还适用网站规则。</p>
+      <h2>可选账号</h2>
+      <p>仅在登录或恢复既有会话时处理账号资料、设备授权码、访问与刷新令牌，以及协议要求的设备公钥登记信息。访问令牌仅驻留内存，刷新令牌与设备私钥使用 Windows Credential Manager 保存。退出会清理客户端刷新凭据；设备撤销按服务端协议处理。客户端不要求会员、权益期限或离线激活。</p>
+      <h2>基础运行统计</h2>
+      <p>当前普通版本向 XAOCEN 遥测服务发送基础事件，默认启用，首次说明中可禁止全部统计上传。基础事件记录首次运行、启动、版本更新和核心功能启用，包含随机实例标识、会话标识、事件标识、发生时间、产品编号、平台、应用版本及偏好版本等协议字段。不包含电脑型号、完整 Windows 版本、SSID、网卡名称、IP、MAC、账号、令牌、日志正文或授权内容。随机标识可关联同一实例事件，不等于绝对匿名，也不等于准确人数。</p>
+      <h2>增强分析与崩溃报告</h2>
+      <p>增强分析独立可选、默认关闭，记录白名单内功能使用和会话汇总。崩溃报告独立可选、默认关闭，启用后可能包含系统版本、架构、异常类型、错误码、经脱敏和截断的错误消息与调用栈。我们尽量去除网络标识、邮箱、路径和令牌，但脱敏存在局限；不上传原始内存转储或完整运行日志。已有用户的选择会沿用。</p>
+      <h2>开关、排队与删除</h2>
+      <p>设置中的“禁止所有统计上传”停止生成、缓存和发送遥测事件并清理待上传队列，不禁止账号、文档、反馈或连通性探测请求；已发出的请求无法撤回。关闭增强分析或崩溃报告会移除对应待上传事件。重置匿名标识会删除本地队列并创建新标识，不会自动删除服务端历史数据。离线队列最多 500 条，失败时保留并在后续触发时重试。</p>
+      <h2>保存位置与期限</h2>
+      <p>本地配置、日志和 telemetry 子目录位于 %LOCALAPPDATA%\XAOCEN ReWiFi；替换 EXE 不清空这些数据。退出后可自行删除不再需要的本地文件，并通过凭据管理器管理账号凭据。服务器遥测期限沿用官网已公布规则：原始事件最长 90 天、崩溃事件最长 30 天、聚合统计最长 12 个月；账号、安全与反馈数据按官网政策及必要处理期限保存，依法必须保留的除外。备份和删除执行由服务端负责。</p>
+      <h2>共享与反馈</h2>
+      <p>遥测服务和 Account 由 XAOCEN 运营；基础设施服务商可能处理必要网络信息。不出售个人信息。用户主动提交的反馈描述、诊断和截图交由官方反馈服务处理，截图可能含个人信息；客户端不会因打开反馈页而自动上传本地文件。</p>
+      <h2>权利与变更</h2>
+      <p>可在设置中改变统计偏好，在账号中心管理会话或申请注销；访问、更正、删除、撤回或解释请求可发送至 privacy@xaocen.studio。按官网公布的 14 个工作日或法律规定期限反馈，必要时进行适度身份核验。当前服务不面向未成年人提供账号服务，发现不适当收集时可联系处理。新增用途、共享或实质政策变化将另行告知，需同意的处理另行征求同意。</p>
+    </article>
+    <footer>本地文档 · 开发：XAOCEN STUDIO</footer>
+  </main>
+</body>
+</html>
