@@ -58,7 +58,7 @@ internal static class DocumentationRouter
     {
         var handler = new HttpClientHandler { UseProxy = true };
         var client = new HttpClient(handler) { Timeout = AvailabilityTimeout };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("XAOCEN-ReWiFi/2.3");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("XAOCEN-ReWiFi/2.4");
         return client;
     }
 

@@ -1,7 +1,7 @@
 XAOCEN ReWiFi
 无线重连工具
 
-Version: v2.3
+Version: v2.4
 
 用于持续监测 Windows 当前 Wi‑Fi 状态、
 并在网络异常时自动重启 Wi‑Fi 与重新连接。

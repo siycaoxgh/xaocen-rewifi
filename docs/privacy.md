@@ -1,10 +1,10 @@
 # XAOCEN ReWiFi 隐私说明
 
-版本：2026-09-13 · 随 2.3 发布适用；官网生效以实际发布为准。
+版本：2026-09-13 · 随 2.4 发布适用；官网生效以实际发布为准。
 
 ## 适用范围与联系
 
-本说明适用于 XAOCEN ReWiFi 2.3 便携客户端。运营方为 XAOCEN STUDIO（晓枨科技工作室）；隐私事务联系 privacy@xaocen.studio，无需登录即可通过邮箱提出问题。官网账号和反馈页面另适用官网隐私政策 https://www.xaocen.studio/privacy/ 。
+本说明适用于 XAOCEN ReWiFi 2.4 Windows x64 便携客户端。运营方为 XAOCEN STUDIO（晓枨科技工作室）；隐私事务联系 privacy@xaocen.studio，无需登录即可通过邮箱提出问题。官网账号和反馈页面另适用官网隐私政策 https://www.xaocen.studio/privacy/ 。
 
 ## 本地网络处理
 

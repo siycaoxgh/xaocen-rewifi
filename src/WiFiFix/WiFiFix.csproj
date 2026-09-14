@@ -18,11 +18,11 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <Version>2.3</Version>
-    <InformationalVersion>2.3</InformationalVersion>
+    <Version>2.4</Version>
+    <InformationalVersion>2.4</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-    <AssemblyVersion>2.3.0.0</AssemblyVersion>
-    <FileVersion>2.3.0.0</FileVersion>
+    <AssemblyVersion>2.4.0.0</AssemblyVersion>
+    <FileVersion>2.4.0.0</FileVersion>
     <!-- A build-only revision keeps same public versions distinguishable during portable upgrades. -->
     <BuildRevision Condition="'$(BuildRevision)' == ''">$([System.DateTime]::UtcNow.Ticks)</BuildRevision>
     <ApplicationIcon>Assets\xaocen-rewifi_rounded.ico</ApplicationIcon>

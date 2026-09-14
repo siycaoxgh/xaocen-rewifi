@@ -54,7 +54,7 @@
       <img src="xaocen-rewifi.png" alt="XAOCEN ReWiFi 无线重连工具">
       <div class="hero-content">
         <h1>XAOCEN ReWiFi</h1>
-        <div class="subtitle">无线重连工具 · Version v2.3</div>
+        <div class="subtitle">无线重连工具 · Version v2.4</div>
         <p class="lead">用于持续监测 Windows 当前 Wi‑Fi 状态，并在网络异常时自动重启 Wi‑Fi 与重新连接。</p>
         <p>专注于稳定、安静的后台运行，让重要的网络任务保持顺畅进行。</p>
         <p>XAOCEN ReWiFi 是一个轻量的 Windows Wi‑Fi 自动恢复托盘工具。它持续读取 Windows 自己维护的网络状态，在指定 Wi‑Fi 出现持续异常时，自动关闭并重新开启 Wi‑Fi 网卡，然后连接 Windows 已保存的 Wi‑Fi Profile。</p>
@@ -81,14 +81,14 @@
     <h2>编译</h2>
     <pre><code>dotnet build .\XAOCEN-WiFiFix.sln -c Release
 
-dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\build\v2.3-release</code></pre>
+dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o .\build\v2.4-release</code></pre>
     <p>输出文件名为 <code>XAOCEN-ReWiFi.exe</code>。自包含便携版本，目标电脑不需要另外安装 .NET 10。</p>
 
     <h2>使用与协议</h2><p>用户协议和隐私说明可从程序托盘菜单或设置页面查看。在线入口由客户端根据网络状态打开官网版本或内置副本。</p>
     <h2>使用</h2>
     <ol><li>先通过 Windows Wi‑Fi 菜单连接一次目标网络，让 Windows 保存该 Wi‑Fi Profile。</li><li>以管理员身份运行 <code>XAOCEN-ReWiFi.exe</code>。</li><li>右键托盘图标打开“设置”；设置窗口会在任务栏显示独立的 ReWiFi 图标，便于从其他窗口后方找回。</li><li>在“网络恢复”区域点击“自动识别当前连接”，程序会自动填入当前 SSID 和 Wi‑Fi 网卡名称。</li><li>保存设置即可。默认异常等待 5 秒、恢复冷却 30 秒、自动恢复和开机启动均开启。</li></ol>
 
-    <p>托盘菜单顶部保留产品名称、版本、状态、立即恢复、自动恢复和开机启动；其余入口已分组为“设置”“账号中心”“文档与帮助”和“帮助与反馈”。“产品介绍与使用帮助”会在在线时打开官网，无法联网时打开内置离线副本。每次构建会自动生成内部构建号，用于识别同一公开版本的新构建，但普通界面仍只显示 2.3。设置窗口与账号中心默认使用 1040×900，并支持调整大小、最大化、DPI 自动缩放以及小屏滚动回退；设置页面将账号、网络恢复、帮助与文档、隐私与统计分别集中展示。</p>
+    <p>托盘菜单顶部保留产品名称、版本、状态、立即恢复、自动恢复和开机启动；其余入口已分组为“设置”“账号中心”“文档与帮助”和“帮助与反馈”。“产品介绍与使用帮助”会在在线时打开官网，无法联网时打开内置离线副本。每次构建会自动生成内部构建号，用于识别同一公开版本的新构建，但普通界面仍只显示 2.4。设置窗口与账号中心默认使用 1040×900，并支持调整大小、最大化、DPI 自动缩放以及小屏滚动回退；设置页面将账号、网络恢复、帮助与文档、隐私与统计分别集中展示。</p>
 
     <h2>可选账号登录</h2><p>登录由 XAOCEN Account 官网完成，访问令牌只保存在内存，刷新令牌保存在 Windows Credential Manager。登录失败、退出账号或断网不影响网络恢复。需要切换浏览器账号时，请在账号中心先选择“取消登录”，再重新发起登录；关闭账号中心也会停止当前轮询。反馈网页可能需要另行登录。本版本不提供会员、离线激活和摄像头扫码。</p>
     <h2>网络判断</h2>
@@ -103,13 +103,15 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
 %LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\queue.json</code></pre>
     <p>基础运行统计仅记录首次运行、启动、版本更新和核心激活规模，不上传系统版本、架构、网络或设备详情。遥测不要求 XAOCEN Account 登录，不上传账号、令牌、授权内容、SSID、网卡名称、MAC、IP、完整日志或文件内容。正式版设置页可单独勾选增强匿名分析和匿名崩溃报告；选择禁止所有数据上传后，这两个选项会暂时停用，且不会产生、缓存或发送任何遥测事件。</p>
     <p>配置文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\config.json</code></pre>
-    <p>账号刷新令牌和设备登记密钥保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。第二个名称为兼容旧版本沿用的凭据目标，当前仅用于 Account 设备登记，不代表启用了离线授权。替换 EXE 不会清空账号会话凭据；历史版本留下的 <code>offline-license.xaocen-license</code> 文件不会被自动删除，但 v2.3 不读取它，也不以它判断功能可用性。</p>
+    <p>账号刷新令牌和设备登记密钥保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。第二个名称为兼容旧版本沿用的凭据目标，当前仅用于 Account 设备登记，不代表启用了离线授权。替换 EXE 不会清空账号会话凭据；历史版本留下的 <code>offline-license.xaocen-license</code> 文件不会被自动删除，但 v2.4 不读取它，也不以它判断功能可用性。</p>
     <p>本地产品介绍页面：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\XAOCEN-ReWiFi-介绍.html</code></pre>
 
     <h2>限制</h2>
     <p>目标 Wi‑Fi 必须已经由当前 Windows 用户保存过 Profile。Google 或百度可能受到代理规则、域名策略或服务故障影响，因此“一成功一失败”只记录为部分可达，不会据此重启 Wi‑Fi。</p>
 
     <h2>更新日志</h2>
+    <h3>v2.4 · 2026-09-15</h3>
+    <ul><li>公开版本升级为 2.4，仅提供 Windows x64 自包含单文件便携版。</li><li>延续 v2.3 已完成的目标 SSID 核对、退出取消、配置回滚和单实例超时保护。</li><li>同步更新程序元数据、内置帮助、协议适用版本和项目文档。</li></ul>
     <h3>v2.3 · 2026-09-15</h3>
     <ul><li>后台监测通过 Windows WLAN 原生接口核对当前 SSID；连接到其他 Wi‑Fi 时会明确显示异常，并按设置恢复目标网络。</li><li>应用退出会取消尚未完成的连通性探测。</li><li>托盘和设置页保存失败时恢复原配置与开机任务状态。</li><li>单实例更新确认增加 30 秒超时和明确处理提示。</li><li>修复正式发布构建中增强匿名分析、匿名崩溃报告和禁止所有统计上传无法选择的问题。</li><li>禁止全部统计上传期间不再保留以后可补传的首次运行、更新或激活状态；总开关会取消正在发送或重试的批次，重新允许后只统计此后的活动。</li><li>遥测服务响应格式异常时保留原队列，不再产生未观察任务异常。</li><li>账号登录增加“取消登录”；切换浏览器账号时可取消旧请求后重新登录，关闭账号中心也会终止轮询。</li><li>设备授权成功后不再重复登记设备；新刷新令牌在后续资料请求前保存，避免网络失败丢失会话。</li><li>重构设置窗口和账号中心布局，取消悬浮按钮与固定内容挤压；窗口可调整大小，并在不同分辨率和缩放比例下自动适配。</li><li>两个窗口使用独立滚动视口和最小内容高度；上下缩小窗口时显示右侧滚动条，恢复高度后自动隐藏。</li><li>账号中心改为全局单一窗口，从设置页、托盘或重复点击进入时只会唤醒已有窗口。</li><li>产品帮助、用户协议和隐私说明统一使用 6 秒在线检查；官网可达时打开浏览器，不可达时回退内置副本。</li><li>恢复流程在退出或升级中断时增加网卡重新启用兜底，避免 Wi‑Fi 停留在禁用状态。</li><li>Wi-Fi 自动识别按接口 GUID 匹配网卡并适配 Windows 本地编码，多网卡无法可靠匹配时不再猜测。</li><li>账号离线退出仍会清理本机凭据；旧离线授权与二维码源码不再参与当前发布编译，设备公钥由独立身份服务维护。</li></ul>
     <h3>v1.5 · 2026-08-22</h3>

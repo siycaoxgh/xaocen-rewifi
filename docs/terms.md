@@ -1,10 +1,10 @@
 # XAOCEN ReWiFi 使用协议
 
-版本：2026-09-13 · 随 2.3 发布适用；官网生效以实际发布为准。
+版本：2026-09-13 · 随 2.4 发布适用；官网生效以实际发布为准。
 
 ## 适用范围与运营方
 
-本协议适用于 XAOCEN ReWiFi（无线重连）Windows 便携客户端 2.3 及后续采用本协议的版本。运营方为 XAOCEN STUDIO（晓枨科技工作室）。产品反馈：https://www.xaocen.studio/products/support/?product=rewifi；隐私与权利请求邮箱：privacy@xaocen.studio。
+本协议适用于 XAOCEN ReWiFi（无线重连）Windows x64 便携客户端 2.4 及后续采用本协议的版本。运营方为 XAOCEN STUDIO（晓枨科技工作室）。产品反馈：https://www.xaocen.studio/products/support/?product=rewifi；隐私与权利请求邮箱：privacy@xaocen.studio。
 
 ## 永久免费与可选账号
 
