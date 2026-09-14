@@ -14,8 +14,8 @@ public sealed class SettingsForm : Form
     private readonly AppConfig _initialConfig;
     private readonly WifiController _wifiController;
     private readonly AccountSessionManager _accountSessionManager;
-    private readonly OfflineAuthorizationManager _offlineAuthorizationManager;
     private readonly TelemetryClient _telemetry;
+    private readonly Action<IWin32Window?> _openAccountCenter;
     private readonly Action<AppConfig> _saveAction;
     private readonly Label _accountSummary = CreateSummaryLabel();
     private readonly Label _authorizationSummary = CreateSummaryLabel();
@@ -28,49 +28,50 @@ public sealed class SettingsForm : Form
         AppConfig config,
         WifiController wifiController,
         AccountSessionManager accountSessionManager,
-        OfflineAuthorizationManager offlineAuthorizationManager,
         TelemetryClient telemetry,
+        Action<IWin32Window?> openAccountCenter,
         Action<AppConfig> saveAction)
     {
         _initialConfig = config.Clone();
         _wifiController = wifiController;
         _accountSessionManager = accountSessionManager;
-        _offlineAuthorizationManager = offlineAuthorizationManager;
         _telemetry = telemetry;
+        _openAccountCenter = openAccountCenter;
         _saveAction = saveAction;
         Text = $"{ProductInfo.ProductName} 设置";
         Font = new Font("Microsoft YaHei UI", 9F);
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Color.FromArgb(247, 249, 251);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterScreen;
-        MaximizeBox = false;
+        MaximizeBox = true;
         MinimizeBox = true;
         ShowInTaskbar = true;
         Icon = LoadApplicationIcon();
-        ClientSize = new Size(1040, 810);
+        MinimumSize = new Size(720, 560);
+        ClientSize = new Size(1040, 900);
         _ssidTextBox.Text = _initialConfig.TargetSsid;
         _adapterTextBox.Text = _initialConfig.AdapterName;
 
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             Padding = new Padding(14, 10, 14, 14),
             ColumnCount = 1,
             RowCount = 6,
-            AutoScroll = true
+            AutoScroll = false
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 196));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
         overview.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         overview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        overview.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         overview.Controls.Add(new PictureBox
         {
@@ -106,7 +107,7 @@ public sealed class SettingsForm : Form
             ActiveLinkColor = Color.FromArgb(20, 196, 211),
             VisitedLinkColor = Color.FromArgb(8, 123, 192)
         };
-        githubLink.LinkClicked += (_, _) => OpenExternalUrl(ProductInfo.GitHubUrl);
+        githubLink.LinkClicked += (_, _) => OpenExternalUrl(ProductInfo.GitHubReleasesUrl);
         overviewActions.Controls.Add(githubLink);
         overview.Controls.Add(overviewActions, 1, 1);
         layout.Controls.Add(overview, 0, 0);
@@ -185,26 +186,30 @@ public sealed class SettingsForm : Form
             BackColor = Color.FromArgb(255, 189, 74),
             ForeColor = Color.FromArgb(23, 33, 43)
         };
+        saveButton.MinimumSize = new Size(120, 32);
         saveButton.FlatAppearance.BorderColor = Color.FromArgb(246, 169, 28);
         saveButton.Click += SaveButtonOnClick;
         buttonBar.Controls.Add(saveButton);
-        buttonBar.Resize += (_, _) => saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
+        buttonBar.Resize += (_, _) =>
+        {
+            saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
+            saveButton.Top = Math.Max(0, (buttonBar.ClientSize.Height - saveButton.Height) / 2);
+        };
         layout.Controls.Add(buttonBar, 0, 5);
 
-        Controls.Add(layout);
+        Controls.Add(ResponsiveWindow.CreateScrollableViewport(layout, 868));
         AcceptButton = saveButton;
         Shown += (_, _) =>
         {
+            ResponsiveWindow.FitToWorkingArea(this);
             _ssidTextBox.Focus();
             RefreshAuthorizationSummary();
         };
         _accountSessionManager.StatusChanged += AccountStateChanged;
-        _offlineAuthorizationManager.StateChanged += AuthorizationStateChanged;
         _telemetry.StatusChanged += TelemetryStateChanged;
         FormClosed += (_, _) =>
         {
             _accountSessionManager.StatusChanged -= AccountStateChanged;
-            _offlineAuthorizationManager.StateChanged -= AuthorizationStateChanged;
             _telemetry.StatusChanged -= TelemetryStateChanged;
         };
     }
@@ -225,29 +230,18 @@ public sealed class SettingsForm : Form
             ColumnCount = 2,
             RowCount = 1,
             Margin = new Padding(0),
-            Padding = new Padding(0, 8, 0, 0)
+            Padding = new Padding(0, 4, 0, 0)
         };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary), 0, 0);
-        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 0);
-
         var centerButton = CreateSectionButton("打开账号中心", Color.FromArgb(255, 189, 74));
-        centerButton.AutoSize = false;
-        centerButton.Size = centerButton.GetPreferredSize(Size.Empty);
-        centerButton.Height = 30;
-        centerButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        centerButton.MinimumSize = new Size(140, 32);
         centerButton.Click += (_, _) => OpenAuthorizationCenter();
+        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary, centerButton), 0, 0);
+        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 0);
         group.Controls.Add(table);
-        group.Controls.Add(centerButton);
-        group.Resize += (_, _) =>
-        {
-            centerButton.Left = Math.Max(180, group.ClientSize.Width - centerButton.Width - 12);
-            centerButton.Top = 6;
-            centerButton.BringToFront();
-        };
         return group;
     }
 
@@ -297,6 +291,7 @@ public sealed class SettingsForm : Form
         {
             Text = _telemetry.GetStatus().IsTestBuild ? "隐私与统计（测试）" : "隐私与统计",
             Dock = DockStyle.Fill,
+            MinimumSize = new Size(0, 218),
             Padding = new Padding(10),
             BackColor = Color.White,
             ForeColor = Color.FromArgb(23, 33, 43)
@@ -311,10 +306,10 @@ public sealed class SettingsForm : Form
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var consent = _telemetry.Consent;
         var baseSummary = new Label
@@ -331,25 +326,28 @@ public sealed class SettingsForm : Form
         _analyticsConsent.Text = "增强匿名分析（可选）";
         _analyticsConsent.Checked = consent.Analytics;
         _analyticsConsent.AutoSize = true;
-        _analyticsConsent.Margin = new Padding(0);
+        _analyticsConsent.Anchor = AnchorStyles.Left;
+        _analyticsConsent.Margin = new Padding(0, 4, 0, 4);
         _crashConsent.Text = "匿名崩溃报告（可选）";
         _crashConsent.Checked = consent.Crash;
         _crashConsent.AutoSize = true;
-        _crashConsent.Margin = new Padding(0);
+        _crashConsent.Anchor = AnchorStyles.Left;
+        _crashConsent.Margin = new Padding(0, 4, 0, 4);
         _disableAllTelemetry.Text = "禁止所有统计上传";
         _disableAllTelemetry.Checked = consent.AllUploadsDisabled;
         _disableAllTelemetry.AutoSize = true;
-        _disableAllTelemetry.Margin = new Padding(0);
-        var enabled = _telemetry.GetStatus().IsTestBuild;
-        _analyticsConsent.Enabled = enabled && !consent.AllUploadsDisabled;
-        _crashConsent.Enabled = enabled && !consent.AllUploadsDisabled;
-        _disableAllTelemetry.Enabled = enabled;
+        _disableAllTelemetry.Anchor = AnchorStyles.Left;
+        _disableAllTelemetry.Margin = new Padding(0, 4, 0, 4);
+        var telemetryAvailable = _telemetry.GetStatus().IsEnabled;
+        _analyticsConsent.Enabled = telemetryAvailable && !consent.AllUploadsDisabled;
+        _crashConsent.Enabled = telemetryAvailable && !consent.AllUploadsDisabled;
+        _disableAllTelemetry.Enabled = telemetryAvailable;
         table.Controls.Add(_analyticsConsent, 0, 1);
         table.Controls.Add(_crashConsent, 1, 1);
         table.Controls.Add(_disableAllTelemetry, 0, 2);
         _disableAllTelemetry.CheckedChanged += (_, _) =>
         {
-            var controlsEnabled = enabled && !_disableAllTelemetry.Checked;
+            var controlsEnabled = telemetryAvailable && !_disableAllTelemetry.Checked;
             _analyticsConsent.Enabled = controlsEnabled;
             _crashConsent.Enabled = controlsEnabled;
         };
@@ -383,7 +381,7 @@ public sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Microsoft YaHei UI", 8.5F),
             ForeColor = Color.FromArgb(80, 92, 104),
-            Margin = new Padding(0)
+            Margin = new Padding(0, 4, 0, 0)
         };
         table.Controls.Add(privacyNote, 0, 3);
         table.SetColumnSpan(privacyNote, 3);
@@ -452,8 +450,7 @@ public sealed class SettingsForm : Form
 
     private void OpenAuthorizationCenter()
     {
-        using var form = new AuthorizationForm(_accountSessionManager, _offlineAuthorizationManager);
-        form.ShowDialog(this);
+        _openAccountCenter(this);
         RefreshAuthorizationSummary();
     }
 
@@ -481,8 +478,6 @@ public sealed class SettingsForm : Form
     }
 
     private void AccountStateChanged(string _) => RefreshAuthorizationSummaryOnUiThread();
-
-    private void AuthorizationStateChanged() => RefreshAuthorizationSummaryOnUiThread();
 
     private void TelemetryStateChanged() => RefreshTelemetryStatusOnUiThread();
 
@@ -524,40 +519,6 @@ public sealed class SettingsForm : Form
         {
             // The settings form can close while a background authorization check completes.
         }
-    }
-
-    private static string FormatEntitlementStatus(string? status) => status switch
-    {
-        "active" => "有效",
-        "expired" => "已过期",
-        "revoked" => "已撤销",
-        _ => string.IsNullOrWhiteSpace(status) ? "未知" : status
-    };
-
-    private static string FormatEntitlementExpiry(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "永久" : FormatAuthorizationDate(value);
-
-    private static string FormatLicenseType(string? value) => value switch
-    {
-        "perpetual" => "永久授权",
-        "subscription" => "订阅授权",
-        "trial" => "试用授权",
-        "public_test" => "公开测试授权",
-        _ => string.IsNullOrWhiteSpace(value) ? "未知类型" : value
-    };
-
-    private static string FormatAuthorizationDate(string? value)
-    {
-        return DateTimeOffset.TryParse(value, out var timestamp)
-            ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
-            : string.IsNullOrWhiteSpace(value) ? "未知" : value;
-    }
-
-    private static string FormatAuthorizationDate(DateTimeOffset? value)
-    {
-        return value is { } timestamp
-            ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-            : "未设置";
     }
 
     private void AddField(TableLayoutPanel layout, int row, string labelText, Control control, string suffix = "")
@@ -609,19 +570,23 @@ public sealed class SettingsForm : Form
         Margin = new Padding(0, 5, 0, 5)
     };
 
-    private static Control CreateSummaryPanel(string title, Label summary)
+    private static Control CreateSummaryPanel(string title, Label summary, Control? footer = null)
     {
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = footer is null ? 2 : 3,
             BackColor = Color.White,
             Margin = new Padding(0, 0, 8, 4),
             Padding = new Padding(10, 6, 10, 6)
         };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        if (footer is not null)
+        {
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        }
         panel.Controls.Add(new Label
         {
             Text = title,
@@ -632,6 +597,12 @@ public sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft
         }, 0, 0);
         panel.Controls.Add(summary, 0, 1);
+        if (footer is not null)
+        {
+            footer.Anchor = AnchorStyles.Left;
+            footer.Margin = new Padding(0, 4, 0, 0);
+            panel.Controls.Add(footer, 0, 2);
+        }
         return panel;
     }
 

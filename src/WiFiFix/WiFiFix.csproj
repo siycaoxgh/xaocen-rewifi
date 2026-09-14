@@ -43,7 +43,7 @@
     <EmbeddedResource Include="Assets\terms.html" />
     <EmbeddedResource Include="Assets\privacy.html" />
     <EmbeddedResource Include="Assets\xaocen-rewifi.png" />
-    <Compile Remove="QrScannerForm.cs;QrCodeForm.cs;QrCodeService.cs" />
+    <Compile Remove="QrScannerForm.cs;QrCodeForm.cs;QrCodeService.cs;OfflineAuthorizationManager.cs;OfflineLicenseService.cs" />
   </ItemGroup>
 
 </Project>

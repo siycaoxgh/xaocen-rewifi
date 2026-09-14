@@ -9,7 +9,7 @@
     body{margin:0;color:var(--text-body);background:var(--bg-page);line-height:1.75}
     .page{max-width:1000px;margin:0 auto;padding:28px 34px 56px}
     .document-hero,.document-card{border:1px solid var(--border);border-radius:18px;background:var(--bg-card);box-shadow:0 8px 28px rgba(23,33,43,.08)}
-    .document-hero{padding:30px 34px 26px;background:linear-gradient(135deg,#F0FCFD,#FFFFFF)}
+    .document-hero{padding:30px 34px 26px;background:var(--bg-card)}
     .document-card{margin-top:18px;padding:24px 34px 30px}
     .kicker{margin:0 0 8px;color:#1497A3;font-size:13px;letter-spacing:.14em}
     h1{margin:0;color:var(--text-primary);font-size:30px;line-height:1.25}
@@ -40,7 +40,7 @@
       <h2>联网请求</h2>
       <p>网络异常时可访问 Google、百度进行连通性探测；首次文档选择会检查官网页面可达性；登录与统计分别访问 Account 及统计接口。远端服务与网络基础设施能够在连接层看到来源 IP、时间等技术信息，不能把“不在统计事件中上传 IP”理解为网络请求完全匿名。网站访问还适用网站规则。</p>
       <h2>可选账号</h2>
-      <p>仅在登录或恢复既有会话时处理账号资料、设备授权码、访问与刷新令牌，以及协议要求的设备公钥登记信息。访问令牌仅驻留内存，刷新令牌与设备私钥使用 Windows Credential Manager 保存。退出会清理客户端刷新凭据；设备撤销按服务端协议处理。客户端不要求会员、权益期限或离线激活。</p>
+      <p>仅在登录或恢复既有会话时处理账号资料、设备授权码、访问与刷新令牌，以及协议要求的设备公钥登记信息。访问令牌仅驻留内存，刷新令牌与设备登记私钥使用 Windows Credential Manager 保存。退出账号会清理本机刷新凭据；即使服务端暂时不可达，也不会阻止本机退出。其他设备管理和账号注销由 XAOCEN Account 网页提供。客户端不要求会员、权益期限或离线激活。</p>
       <h2>基础运行统计</h2>
       <p>当前普通版本向 XAOCEN 遥测服务发送基础事件，默认启用，首次说明中可禁止全部统计上传。基础事件记录首次运行、启动、版本更新和核心功能启用，包含随机实例标识、会话标识、事件标识、发生时间、产品编号、平台、应用版本及偏好版本等协议字段。不包含电脑型号、完整 Windows 版本、SSID、网卡名称、IP、MAC、账号、令牌、日志正文或授权内容。随机标识可关联同一实例事件，不等于绝对匿名，也不等于准确人数。</p>
       <h2>增强分析与崩溃报告</h2>
@@ -52,9 +52,9 @@
       <h2>共享与反馈</h2>
       <p>遥测服务和 Account 由 XAOCEN 运营；基础设施服务商可能处理必要网络信息。不出售个人信息。用户主动提交的反馈描述、诊断和截图交由官方反馈服务处理，截图可能含个人信息；客户端不会因打开反馈页而自动上传本地文件。</p>
       <h2>权利与变更</h2>
-      <p>可在设置中改变统计偏好，在账号中心管理会话或申请注销；访问、更正、删除、撤回或解释请求可发送至 privacy@xaocen.studio。按官网公布的 14 个工作日或法律规定期限反馈，必要时进行适度身份核验。当前服务不面向未成年人提供账号服务，发现不适当收集时可联系处理。新增用途、共享或实质政策变化将另行告知，需同意的处理另行征求同意。</p>
+      <p>可在设置中改变统计偏好，在客户端账号中心管理本机会话；账号注销和其他设备管理由 XAOCEN Account 网页提供。访问、更正、删除、撤回或解释请求可发送至 privacy@xaocen.studio。按官网公布的 14 个工作日或法律规定期限反馈，必要时进行适度身份核验。当前服务不面向未成年人提供账号服务，发现不适当收集时可联系处理。新增用途、共享或实质政策变化将另行告知，需同意的处理另行征求同意。</p>
     </article>
-    <footer>本地文档 · 开发：XAOCEN STUDIO</footer>
+    <footer><div>开发：XAOCEN STUDIO</div><div>© 2026 XAOCEN · All Rights Reserved.</div></footer>
   </main>
 </body>
 </html>

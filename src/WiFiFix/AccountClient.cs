@@ -99,49 +99,6 @@ internal sealed class AccountClient : IDisposable
         await SendSessionCommandAsync("/v1/auth/device/logout", refreshToken, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RevokeDeviceSessionAsync(string refreshToken, CancellationToken cancellationToken)
-    {
-        await SendSessionCommandAsync("/v1/auth/device/revoke", refreshToken, cancellationToken).ConfigureAwait(false);
-    }
-
-    public async Task<OfflineLicenseCheckResponse> CheckOfflineLicenseAsync(
-        string compactLicense,
-        string devicePublicKey,
-        CancellationToken cancellationToken)
-    {
-        var payload = new
-        {
-            compactLicense,
-            devicePublicKey,
-            productVersion = AppLogger.Version
-        };
-        using var response = await PostJsonAsync("/v1/auth/offline/check", payload, cancellationToken).ConfigureAwait(false);
-        using var document = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
-        return ParseOfflineLicenseCheckResponse(document.RootElement);
-    }
-
-    public async Task<string> RefreshOfflineLicenseAsync(
-        string compactLicense,
-        string devicePublicKey,
-        CancellationToken cancellationToken)
-    {
-        var payload = new
-        {
-            compactLicense,
-            devicePublicKey,
-            productVersion = AppLogger.Version
-        };
-        using var response = await PostJsonAsync("/v1/auth/offline/refresh", payload, cancellationToken).ConfigureAwait(false);
-        using var document = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
-        var refreshedLicense = GetString(document.RootElement, "compactLicense", "license");
-        if (string.IsNullOrWhiteSpace(refreshedLicense))
-        {
-            throw new AccountProtocolException("离线授权重新签发响应缺少 compactLicense。");
-        }
-
-        return refreshedLicense;
-    }
-
     public async Task<AccountProfile> GetAccountAsync(string accessToken, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, CreateUri("/v1/account/me"));
@@ -158,51 +115,6 @@ internal sealed class AccountClient : IDisposable
             GetString(root, "locale"),
             GetString(root, "timezone"),
             GetBool(root, "deletionRequested"));
-    }
-
-    public async Task<IReadOnlyList<AccountEntitlement>> GetEntitlementsAsync(
-        string accessToken,
-        CancellationToken cancellationToken)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, CreateUri("/v1/account/entitlements"));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        using var response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
-        using var document = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-        var items = root.ValueKind == JsonValueKind.Array
-            ? root.EnumerateArray()
-            : root.TryGetProperty("entitlements", out var entitlements) && entitlements.ValueKind == JsonValueKind.Array
-                ? entitlements.EnumerateArray()
-                : throw new AccountProtocolException("权益响应缺少 entitlements 数组。");
-
-        var result = new List<AccountEntitlement>();
-        foreach (var item in items)
-        {
-            if (item.ValueKind != JsonValueKind.Object)
-            {
-                throw new AccountProtocolException("权益响应包含无效项目。");
-            }
-
-            result.Add(new AccountEntitlement(
-                GetString(item, "entitlementId", "id"),
-                GetString(item, "productId"),
-                GetString(item, "licenseType"),
-                GetString(item, "grantKind"),
-                GetString(item, "source"),
-                GetString(item, "status"),
-                GetInt(item, "maxDevices") ?? 0,
-                GetInt(item, "activeDevices") ?? 0,
-                GetString(item, "validFrom"),
-                GetString(item, "expiresAt"),
-                GetString(item, "planCode"),
-                GetBool(item, "autoRenew") ?? false,
-                GetInt(item, "renewalPeriodDays"),
-                GetString(item, "graceUntil"),
-                GetString(item, "createdAt"),
-                GetBool(item, "offlineAuthorizationAvailable") ?? false));
-        }
-
-        return result;
     }
 
     public async Task RegisterOnlineDeviceAsync(
@@ -306,25 +218,6 @@ internal sealed class AccountClient : IDisposable
         return new AccountTokenResponse(accessToken, refreshToken ?? string.Empty, TimeSpan.FromSeconds(Math.Clamp(expiresIn, 60, 86400)));
     }
 
-    private static OfflineLicenseCheckResponse ParseOfflineLicenseCheckResponse(JsonElement root)
-    {
-        var valid = GetBool(root, "valid");
-        if (valid is null)
-        {
-            throw new AccountProtocolException("离线检查响应缺少 valid 字段。");
-        }
-
-        return new OfflineLicenseCheckResponse(
-            valid.Value,
-            GetString(root, "productId"),
-            GetString(root, "deviceId"),
-            GetString(root, "licenseType"),
-            GetBool(root, "checkRequired") ?? false,
-            GetBool(root, "reauthorizationRequired") ?? false,
-            GetString(root, "nextOnlineCheckAt"),
-            GetString(root, "hardReauthorizeAt"));
-    }
-
     private static string? GetString(JsonElement root, params string[] names)
     {
         foreach (var name in names)
@@ -375,7 +268,6 @@ internal sealed class AccountSessionManager : IDisposable
     private readonly SemaphoreSlim _authorizationLock = new(1, 1);
     private CancellationTokenSource _shutdown = new();
     private AccountSession? _session;
-    private IReadOnlyList<AccountEntitlement>? _entitlements;
 
     public AccountSessionManager(AccountClient? client = null, WindowsCredentialStore? credentialStore = null, Func<string>? devicePublicKeyProvider = null)
     {
@@ -385,7 +277,6 @@ internal sealed class AccountSessionManager : IDisposable
     }
 
     public AccountSession? CurrentSession => _session;
-    public IReadOnlyList<AccountEntitlement>? CurrentEntitlements => _entitlements;
     internal AccountClient Client => _client;
     public event Action<string>? StatusChanged;
     public event Action<DeviceAuthorizationProgress>? AuthorizationProgressChanged;
@@ -488,7 +379,6 @@ internal sealed class AccountSessionManager : IDisposable
                 }
                 _credentialStore.WriteRefreshToken(tokenResponse.RefreshToken);
                 _session = new AccountSession(tokenResponse.AccessToken, tokenResponse.ExpiresIn, profile);
-                _entitlements = null;
                 PublishAuthorizationProgress(new DeviceAuthorizationProgress(
                     DeviceAuthorizationPhase.Connected,
                     startedAt,
@@ -512,7 +402,7 @@ internal sealed class AccountSessionManager : IDisposable
             SetStatus("XAOCEN Account 授权超时");
             throw new AccountAuthorizationException("设备授权等待超时，请重新发起授权。");
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             SetStatus("XAOCEN Account 授权已取消");
             PublishAuthorizationResult(new AccountAuthorizationResult(false, "online", "cancelled"));
@@ -559,7 +449,6 @@ internal sealed class AccountSessionManager : IDisposable
                 }
                 _credentialStore.WriteRefreshToken(token.RefreshToken);
                 _session = new AccountSession(token.AccessToken, token.ExpiresIn, profile);
-                _entitlements = null;
                 SetStatus("XAOCEN Account 会话已恢复");
                 AppLogger.Info("XAOCEN Account 会话恢复成功。");
                 return true;
@@ -568,7 +457,6 @@ internal sealed class AccountSessionManager : IDisposable
             {
                 _credentialStore.DeleteRefreshToken();
                 _session = null;
-                _entitlements = null;
                 SetStatus("XAOCEN Account 会话已失效");
                 AppLogger.Warning("XAOCEN Account 刷新令牌已失效，已清理本地凭据。");
                 return false;
@@ -582,44 +470,41 @@ internal sealed class AccountSessionManager : IDisposable
 
     public async Task LogoutAsync(CancellationToken cancellationToken = default)
     {
-        await EndSessionAsync(revoke: false, cancellationToken).ConfigureAwait(false);
+        await EndSessionAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RevokeAsync(CancellationToken cancellationToken = default)
-    {
-        await EndSessionAsync(revoke: true, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task EndSessionAsync(bool revoke, CancellationToken cancellationToken)
+    private async Task EndSessionAsync(CancellationToken cancellationToken)
     {
         await _authorizationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var refreshToken = _credentialStore.ReadRefreshToken();
+            Exception? remoteFailure = null;
             if (!string.IsNullOrWhiteSpace(refreshToken))
             {
                 try
                 {
-                    if (revoke)
-                    {
-                        await _client.RevokeDeviceSessionAsync(refreshToken, cancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await _client.LogoutDeviceSessionAsync(refreshToken, cancellationToken).ConfigureAwait(false);
-                    }
+                    await _client.LogoutDeviceSessionAsync(refreshToken, cancellationToken).ConfigureAwait(false);
                 }
                 catch (AccountHttpException ex) when (ex.StatusCode == 401)
                 {
                     // The server already considers the credential invalid; local
                     // cleanup is still the correct terminal action.
                 }
+                catch (Exception ex) when (ex is AccountHttpException or HttpRequestException or TaskCanceledException)
+                {
+                    // Logging out is a local terminal action. Network/API failure
+                    // must not trap a user in a session on this computer.
+                    remoteFailure = ex;
+                    AppLogger.Warning($"Account 服务未能确认退出，将继续清理本机会话：{ex.GetType().Name}");
+                }
             }
 
             _credentialStore.DeleteRefreshToken();
             _session = null;
-            _entitlements = null;
-            SetStatus(revoke ? "XAOCEN Account 会话已撤销" : "XAOCEN Account 已退出");
+            SetStatus(remoteFailure is null
+                ? "XAOCEN Account 已退出"
+                : "XAOCEN Account 已在本机退出（服务器通知未完成）");
         }
         finally
         {
@@ -631,7 +516,8 @@ internal sealed class AccountSessionManager : IDisposable
     {
         _shutdown.Cancel();
         _shutdown.Dispose();
-        _authorizationLock.Dispose();
+        // An authorization task may still be unwinding and must be able to release
+        // this semaphore. The process is exiting, so disposing it is unnecessary.
         _client.Dispose();
     }
 
@@ -677,25 +563,6 @@ internal sealed class AccountSessionManager : IDisposable
         AccountProtocolException => "protocol_error",
         _ => "client_error"
     };
-
-    private async Task<IReadOnlyList<AccountEntitlement>?> TryGetEntitlementsAsync(
-        string accessToken,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await _client.GetEntitlementsAsync(accessToken, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            AppLogger.Warning($"ReWiFi 权益查询暂时不可用：{ex.GetType().Name}");
-            return null;
-        }
-    }
 
     private void PublishAuthorizationProgress(DeviceAuthorizationProgress progress)
     {
@@ -761,38 +628,10 @@ internal readonly record struct AccountProfile(
     string? Timezone,
     bool? DeletionRequested);
 
-internal readonly record struct AccountEntitlement(
-    string? EntitlementId,
-    string? ProductId,
-    string? LicenseType,
-    string? GrantKind,
-    string? Source,
-    string? Status,
-    int MaxDevices,
-    int ActiveDevices,
-    string? ValidFrom,
-    string? ExpiresAt,
-    string? PlanCode,
-    bool AutoRenew,
-    int? RenewalPeriodDays,
-    string? GraceUntil,
-    string? CreatedAt,
-    bool OfflineAuthorizationAvailable);
-
 internal readonly record struct AccountSession(
     string AccessToken,
     TimeSpan ExpiresIn,
     AccountProfile Profile);
-
-internal readonly record struct OfflineLicenseCheckResponse(
-    bool Valid,
-    string? ProductId,
-    string? DeviceId,
-    string? LicenseType,
-    bool CheckRequired,
-    bool ReauthorizationRequired,
-    string? NextOnlineCheckAt,
-    string? HardReauthorizeAt);
 
 internal sealed class AccountHttpException : Exception
 {

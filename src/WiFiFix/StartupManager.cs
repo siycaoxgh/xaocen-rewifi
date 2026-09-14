@@ -16,7 +16,13 @@ public sealed class StartupManager
 
     public bool SetEnabled(bool enabled)
     {
-        return enabled ? CreateTask() : DeleteTask();
+        if (enabled)
+        {
+            return CreateTask();
+        }
+
+        // Disabling an already absent task is still a successful, idempotent result.
+        return !IsEnabled() || DeleteTask();
     }
 
     public bool EnsureCurrentExecutable()
@@ -33,7 +39,10 @@ public sealed class StartupManager
             return CreateTask();
         }
 
-        return ConfigurePowerSettings();
+        // Power-setting hardening is best effort. A failure here must not make the
+        // UI claim that an otherwise valid logon task has been disabled.
+        ConfigurePowerSettings();
+        return true;
     }
 
     public bool RefreshSettings() => ConfigurePowerSettings();

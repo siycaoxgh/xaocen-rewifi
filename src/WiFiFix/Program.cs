@@ -76,12 +76,13 @@ internal static class Program
 
         var controller = new WifiController();
         var accountClient = new AccountClient();
-        var offlineAuthorizationManager = new OfflineAuthorizationManager(accountClient);
-        var accountSessionManager = new AccountSessionManager(accountClient, devicePublicKeyProvider: offlineAuthorizationManager.GetDevicePublicKey);
+        var deviceIdentity = new DeviceIdentityService();
+        var accountSessionManager = new AccountSessionManager(accountClient, devicePublicKeyProvider: deviceIdentity.GetOrCreatePublicKey);
         var watcher = new NetworkWatcher(config, controller, new ConnectivityProbe());
         var tray = new TrayManager(config);
         using var instanceCoordinator = new SingleInstanceCoordinator();
         SettingsForm? settingsForm = null;
+        AuthorizationForm? authorizationForm = null;
         var exitStarted = 0;
 
         _ = RestoreAccountSessionAsync();
@@ -129,12 +130,7 @@ internal static class Program
         });
         instanceCoordinator.RestartApproved += () => tray.PostToUi(() => BeginExit("新版接续启动"));
         instanceCoordinator.Start();
-        tray.AccountRequested += () =>
-        {
-            telemetry.MarkFeatureUsed("account.opened");
-            using var form = new AuthorizationForm(accountSessionManager, offlineAuthorizationManager);
-            form.ShowDialog();
-        };
+        tray.AccountRequested += () => ShowAuthorizationCenter(null);
         tray.DocumentationRequested += () => _ = DocumentationRouter.OpenAsync();
         tray.FeedbackRequested += () => FeedbackService.TryOpenSupport();
         tray.DiagnosticRequested += () =>
@@ -228,7 +224,7 @@ internal static class Program
             }
 
             telemetry.MarkFeatureUsed("settings.opened");
-            settingsForm = new SettingsForm(config, controller, accountSessionManager, offlineAuthorizationManager, telemetry, updatedConfig =>
+            settingsForm = new SettingsForm(config, controller, accountSessionManager, telemetry, ShowAuthorizationCenter, updatedConfig =>
             {
                 var startupApplied = startupManager.SetEnabled(updatedConfig.AutoStart);
                 updatedConfig.AutoStart = updatedConfig.AutoStart ? startupApplied : !startupApplied;
@@ -241,6 +237,28 @@ internal static class Program
             settingsForm.FormClosed += (_, _) => settingsForm = null;
             settingsForm.Show();
             ActivateForm(settingsForm);
+        }
+
+        void ShowAuthorizationCenter(IWin32Window? owner)
+        {
+            if (authorizationForm is not null && !authorizationForm.IsDisposed)
+            {
+                ActivateForm(authorizationForm);
+                return;
+            }
+
+            telemetry.MarkFeatureUsed("account.opened");
+            authorizationForm = new AuthorizationForm(accountSessionManager);
+            authorizationForm.FormClosed += (_, _) => authorizationForm = null;
+            if (owner is null)
+            {
+                authorizationForm.Show();
+            }
+            else
+            {
+                authorizationForm.Show(owner);
+            }
+            ActivateForm(authorizationForm);
         }
 
         void ActivateExistingWindowOrSettings()
