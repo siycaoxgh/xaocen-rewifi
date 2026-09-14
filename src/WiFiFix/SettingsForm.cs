@@ -15,6 +15,7 @@ public sealed class SettingsForm : Form
     private readonly WifiController _wifiController;
     private readonly AccountSessionManager _accountSessionManager;
     private readonly TelemetryClient _telemetry;
+    private readonly Action<IWin32Window?> _openAccountCenter;
     private readonly Action<AppConfig> _saveAction;
     private readonly Label _accountSummary = CreateSummaryLabel();
     private readonly Label _authorizationSummary = CreateSummaryLabel();
@@ -28,12 +29,14 @@ public sealed class SettingsForm : Form
         WifiController wifiController,
         AccountSessionManager accountSessionManager,
         TelemetryClient telemetry,
+        Action<IWin32Window?> openAccountCenter,
         Action<AppConfig> saveAction)
     {
         _initialConfig = config.Clone();
         _wifiController = wifiController;
         _accountSessionManager = accountSessionManager;
         _telemetry = telemetry;
+        _openAccountCenter = openAccountCenter;
         _saveAction = saveAction;
         Text = $"{ProductInfo.ProductName} 设置";
         Font = new Font("Microsoft YaHei UI", 9F);
@@ -62,7 +65,7 @@ public sealed class SettingsForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 196));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 218));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
@@ -183,10 +186,15 @@ public sealed class SettingsForm : Form
             BackColor = Color.FromArgb(255, 189, 74),
             ForeColor = Color.FromArgb(23, 33, 43)
         };
+        saveButton.MinimumSize = new Size(120, 32);
         saveButton.FlatAppearance.BorderColor = Color.FromArgb(246, 169, 28);
         saveButton.Click += SaveButtonOnClick;
         buttonBar.Controls.Add(saveButton);
-        buttonBar.Resize += (_, _) => saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
+        buttonBar.Resize += (_, _) =>
+        {
+            saveButton.Left = buttonBar.ClientSize.Width - saveButton.Width;
+            saveButton.Top = Math.Max(0, (buttonBar.ClientSize.Height - saveButton.Height) / 2);
+        };
         layout.Controls.Add(buttonBar, 0, 5);
 
         Controls.Add(layout);
@@ -220,31 +228,19 @@ public sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 2,
+            RowCount = 1,
             Margin = new Padding(0),
             Padding = new Padding(0, 4, 0, 0)
         };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary), 0, 1);
-        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 1);
-
         var centerButton = CreateSectionButton("打开账号中心", Color.FromArgb(255, 189, 74));
+        centerButton.MinimumSize = new Size(140, 32);
         centerButton.Click += (_, _) => OpenAuthorizationCenter();
-        var accountActions = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
-        };
-        accountActions.Controls.Add(centerButton);
-        table.Controls.Add(accountActions, 0, 0);
-        table.SetColumnSpan(accountActions, 2);
+        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary, centerButton), 0, 0);
+        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 0);
         group.Controls.Add(table);
         return group;
     }
@@ -295,6 +291,7 @@ public sealed class SettingsForm : Form
         {
             Text = _telemetry.GetStatus().IsTestBuild ? "隐私与统计（测试）" : "隐私与统计",
             Dock = DockStyle.Fill,
+            MinimumSize = new Size(0, 218),
             Padding = new Padding(10),
             BackColor = Color.White,
             ForeColor = Color.FromArgb(23, 33, 43)
@@ -453,8 +450,7 @@ public sealed class SettingsForm : Form
 
     private void OpenAuthorizationCenter()
     {
-        using var form = new AuthorizationForm(_accountSessionManager);
-        form.ShowDialog(this);
+        _openAccountCenter(this);
         RefreshAuthorizationSummary();
     }
 
@@ -608,19 +604,23 @@ public sealed class SettingsForm : Form
         Margin = new Padding(0, 5, 0, 5)
     };
 
-    private static Control CreateSummaryPanel(string title, Label summary)
+    private static Control CreateSummaryPanel(string title, Label summary, Control? footer = null)
     {
         var panel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = footer is null ? 2 : 3,
             BackColor = Color.White,
             Margin = new Padding(0, 0, 8, 4),
             Padding = new Padding(10, 6, 10, 6)
         };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        if (footer is not null)
+        {
+            panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        }
         panel.Controls.Add(new Label
         {
             Text = title,
@@ -631,6 +631,12 @@ public sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft
         }, 0, 0);
         panel.Controls.Add(summary, 0, 1);
+        if (footer is not null)
+        {
+            footer.Anchor = AnchorStyles.Left;
+            footer.Margin = new Padding(0, 4, 0, 0);
+            panel.Controls.Add(footer, 0, 2);
+        }
         return panel;
     }
 
