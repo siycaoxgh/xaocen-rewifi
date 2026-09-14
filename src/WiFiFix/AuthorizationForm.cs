@@ -53,7 +53,7 @@ internal sealed class AuthorizationForm : Form
             Padding = new Padding(0),
             AutoScroll = true
         };
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 280));
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
         content.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         content.Controls.Add(CreateOnlineGroup(), 0, 0);
@@ -135,8 +135,9 @@ internal sealed class AuthorizationForm : Form
         var group = CreateGroup("XAOCEN Account 会话");
         group.Margin = new Padding(0, 0, 0, 10);
         var table = CreateTable(2, 3);
+        table.Padding = new Padding(0, 0, 0, 10);
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 142));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         table.Controls.Add(CreateFieldLabel("当前状态："), 0, 0);
         table.Controls.Add(_accountStatus, 1, 0);
@@ -460,10 +461,10 @@ internal sealed class AuthorizationForm : Form
         var panel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            AutoSize = true,
+            AutoSize = false,
             WrapContents = true,
             Margin = new Padding(0),
-            Padding = new Padding(0, 3, 0, 3)
+            Padding = new Padding(0, 5, 0, 9)
         };
         panel.Controls.AddRange(controls);
         return panel;
