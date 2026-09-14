@@ -271,10 +271,10 @@ internal sealed class AuthorizationForm : Form
         }
         else
         {
-            var displayName = string.IsNullOrWhiteSpace(session.Value.Profile.DisplayName)
+            var displayName = string.IsNullOrWhiteSpace(session.Profile.DisplayName)
                 ? "账号已连接"
-                : session.Value.Profile.DisplayName;
-            var email = string.IsNullOrWhiteSpace(session.Value.Profile.Email) ? string.Empty : $" · {session.Value.Profile.Email}";
+                : session.Profile.DisplayName;
+            var email = string.IsNullOrWhiteSpace(session.Profile.Email) ? string.Empty : $" · {session.Profile.Email}";
             SetAccountStatus("XAOCEN Account 已连接",
                 $"{displayName}{email}\n访问令牌仅驻留内存。\n永久免费，全部功能可正常使用。", Color.DarkGreen);
         }

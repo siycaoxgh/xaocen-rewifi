@@ -267,7 +267,7 @@ internal sealed class AccountSessionManager : IDisposable
     private readonly Func<string>? _devicePublicKeyProvider;
     private readonly SemaphoreSlim _authorizationLock = new(1, 1);
     private CancellationTokenSource _shutdown = new();
-    private AccountSession? _session;
+    private volatile AccountSession? _session;
 
     public AccountSessionManager(AccountClient? client = null, WindowsCredentialStore? credentialStore = null, Func<string>? devicePublicKeyProvider = null)
     {
@@ -372,12 +372,15 @@ internal sealed class AccountSessionManager : IDisposable
                     pollCount));
                 SetStatus("设备已批准，正在获取账号信息…");
                 var tokenResponse = await _client.ExchangeDeviceTokenAsync(token.DeviceCode, linked.Token).ConfigureAwait(false);
-                var profile = await _client.GetAccountAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(devicePublicKey))
-                {
-                    await _client.RegisterOnlineDeviceAsync(tokenResponse.AccessToken, devicePublicKey, linked.Token).ConfigureAwait(false);
-                }
+                // The device code is single-use. Persist the issued refresh token
+                // before secondary profile requests so transient failures cannot
+                // discard an otherwise valid session.
                 _credentialStore.WriteRefreshToken(tokenResponse.RefreshToken);
+                var profile = await _client.GetAccountAsync(tokenResponse.AccessToken, linked.Token).ConfigureAwait(false);
+                // The public key was supplied to device/start. Account registers the
+                // product device while exchanging the device code, so a second
+                // register-online call here is redundant and could turn a successful
+                // login into a client-side failure.
                 _session = new AccountSession(tokenResponse.AccessToken, tokenResponse.ExpiresIn, profile);
                 PublishAuthorizationProgress(new DeviceAuthorizationProgress(
                     DeviceAuthorizationPhase.Connected,
@@ -434,6 +437,9 @@ internal sealed class AccountSessionManager : IDisposable
             try
             {
                 var token = await _client.RefreshDeviceSessionAsync(refreshToken, linked.Token).ConfigureAwait(false);
+                // Refresh tokens may rotate. Save the replacement before profile or
+                // compatibility-registration requests use the new access token.
+                _credentialStore.WriteRefreshToken(token.RefreshToken);
                 var profile = await _client.GetAccountAsync(token.AccessToken, linked.Token).ConfigureAwait(false);
                 try
                 {
@@ -447,7 +453,6 @@ internal sealed class AccountSessionManager : IDisposable
                 {
                     AppLogger.Warning($"在线设备登记未完成，会话仍已恢复：{ex.Message}");
                 }
-                _credentialStore.WriteRefreshToken(token.RefreshToken);
                 _session = new AccountSession(token.AccessToken, token.ExpiresIn, profile);
                 SetStatus("XAOCEN Account 会话已恢复");
                 AppLogger.Info("XAOCEN Account 会话恢复成功。");
@@ -628,7 +633,7 @@ internal readonly record struct AccountProfile(
     string? Timezone,
     bool? DeletionRequested);
 
-internal readonly record struct AccountSession(
+internal sealed record AccountSession(
     string AccessToken,
     TimeSpan ExpiresIn,
     AccountProfile Profile);

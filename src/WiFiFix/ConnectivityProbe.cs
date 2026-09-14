@@ -49,7 +49,13 @@ public sealed class ConnectivityProbe
             AppLogger.Info($"连通性探测：{uri.Host}; reachable={reachable}; status={(int)response.StatusCode}");
             return new ConnectivityProbeItem(uri.Host, reachable, (int)response.StatusCode, null);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Application shutdown and recovery cancellation must propagate to the
+            // monitor instead of being converted into two false probe failures.
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             AppLogger.Warning($"连通性探测超时：{uri.Host}");
             return new ConnectivityProbeItem(uri.Host, false, null, "timeout");

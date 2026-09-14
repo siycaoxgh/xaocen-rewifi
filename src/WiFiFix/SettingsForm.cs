@@ -464,10 +464,10 @@ public sealed class SettingsForm : Form
         }
         else
         {
-            var accountName = !string.IsNullOrWhiteSpace(session.Value.Profile.Email)
-                ? session.Value.Profile.Email
-                : !string.IsNullOrWhiteSpace(session.Value.Profile.DisplayName)
-                    ? session.Value.Profile.DisplayName
+            var accountName = !string.IsNullOrWhiteSpace(session.Profile.Email)
+                ? session.Profile.Email
+                : !string.IsNullOrWhiteSpace(session.Profile.DisplayName)
+                    ? session.Profile.DisplayName
                     : "账号信息已验证";
             _accountSummary.Text = $"状态：已连接\n{accountName}\nReWiFi 永久免费";
             _accountSummary.ForeColor = Color.DarkGreen;

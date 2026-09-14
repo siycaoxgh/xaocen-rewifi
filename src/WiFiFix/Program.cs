@@ -19,14 +19,18 @@ internal static class Program
             var response = SingleInstanceCoordinator.NotifyExistingInstance();
             if (response != SingleInstanceResponse.RestartApproved)
             {
-                if (response == SingleInstanceResponse.Unavailable)
+                if (response == SingleInstanceResponse.TimedOut)
+                {
+                    ShowForegroundMessage($"正在运行的 {ProductInfo.DisplayName} 在 30 秒内没有响应。\n\n请先从系统托盘退出旧实例；如果托盘没有响应，请在任务管理器中结束 XAOCEN-ReWiFi 后再打开新版。");
+                }
+                else if (response == SingleInstanceResponse.Unavailable)
                 {
                     ShowForegroundMessage($"{ProductInfo.DisplayName} 已经在运行。\n\n如果正在运行的是旧版本，请先从系统托盘退出旧版，再重新打开新版文件。");
                 }
                 return;
             }
 
-            ownsSingleInstance = TryAcquire(singleInstance, TimeSpan.FromSeconds(20));
+            ownsSingleInstance = TryAcquire(singleInstance, TimeSpan.FromSeconds(25));
             if (!ownsSingleInstance)
             {
                 ShowForegroundMessage("旧版本未能在限定时间内退出。请从系统托盘退出旧版后，再重新打开新版文件。");
@@ -60,7 +64,7 @@ internal static class Program
             var consent = telemetry.Consent;
             telemetry.SetConsent(consent.Analytics, consent.Crash, welcome.DisableStatistics);
             config.LegalNoticeVersion = "2026-09-13";
-            AppConfig.Save(config);
+            SaveConfigBestEffort(config, "保存首次使用说明状态");
         }
         telemetry.InstallGlobalExceptionHandlers();
         telemetry.AddSensitiveValue(config.TargetSsid);
@@ -70,7 +74,7 @@ internal static class Program
         if (config.AutoStart)
         {
             config.AutoStart = startupManager.EnsureCurrentExecutable();
-            AppConfig.Save(config);
+            SaveConfigBestEffort(config, "保存开机任务状态");
         }
         AppLogger.Info($"启动任务状态：存在={startupManager.IsEnabled()}; 任务路径={startupManager.GetConfiguredExecutablePath()}; 当前进程路径={Environment.ProcessPath}");
 
@@ -97,18 +101,48 @@ internal static class Program
         };
         tray.AutoRecoveryChanged += enabled =>
         {
-            config.AutoRecovery = enabled;
-            AppConfig.Save(config);
-            AppLogger.Info($"托盘切换自动恢复：{enabled}");
-            watcher.UpdateConfig(config);
+            var previous = config.Clone();
+            var updated = config.Clone();
+            updated.AutoRecovery = enabled;
+            try
+            {
+                AppConfig.Save(updated);
+                config = updated;
+                AppLogger.Info($"托盘切换自动恢复：{enabled}");
+                watcher.UpdateConfig(config);
+            }
+            catch (Exception ex)
+            {
+                config = previous;
+                tray.ApplyConfig(config);
+                AppLogger.Error("托盘切换自动恢复时保存配置失败，已恢复原状态", ex);
+                tray.ShowNotification("自动恢复设置未能保存，已恢复原状态。");
+            }
         };
         tray.AutoStartChanged += enabled =>
         {
+            var previous = config.Clone();
             var applied = startupManager.SetEnabled(enabled);
-            config.AutoStart = enabled ? applied : !applied;
-            tray.ApplyConfig(config);
-            AppConfig.Save(config);
-            AppLogger.Info($"托盘切换开机启动：请求={enabled}; 结果={config.AutoStart}");
+            var updated = config.Clone();
+            updated.AutoStart = enabled ? applied : !applied;
+            try
+            {
+                AppConfig.Save(updated);
+                config = updated;
+                tray.ApplyConfig(config);
+                AppLogger.Info($"托盘切换开机启动：请求={enabled}; 结果={config.AutoStart}");
+            }
+            catch (Exception ex)
+            {
+                if (!startupManager.SetEnabled(previous.AutoStart))
+                {
+                    AppLogger.Warning("配置保存失败后未能恢复原开机启动任务状态，请在设置中重新确认。");
+                }
+                config = previous;
+                tray.ApplyConfig(config);
+                AppLogger.Error("托盘切换开机启动时保存配置失败，已恢复原状态", ex);
+                tray.ShowNotification("开机启动设置未能保存，已恢复原状态。");
+            }
         };
         tray.SettingsRequested += ShowSettings;
         instanceCoordinator.LaunchRequested = request => tray.InvokeOnUiAsync(() =>
@@ -152,7 +186,7 @@ internal static class Program
         if (!config.WelcomeShown && DocumentationRouter.OpenAsync().GetAwaiter().GetResult())
         {
             config.WelcomeShown = true;
-            AppConfig.Save(config);
+            SaveConfigBestEffort(config, "保存首次产品文档状态");
             AppLogger.Info("首次启动已打开产品文档。");
         }
 
@@ -210,8 +244,11 @@ internal static class Program
 
         static async Task ForceExitIfNeededAsync()
         {
-            await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-            AppLogger.Warning("正常退出超过 10 秒，执行进程退出兜底。");
+            // Network cancellation may spend up to 10 seconds restoring an adapter,
+            // followed by a bounded telemetry flush. Keep this deadline below the
+            // new process's 25-second handoff wait while leaving cleanup enough time.
+            await Task.Delay(TimeSpan.FromSeconds(18)).ConfigureAwait(false);
+            AppLogger.Warning("正常退出超过 18 秒，执行进程退出兜底。");
             Environment.Exit(0);
         }
 
@@ -226,10 +263,23 @@ internal static class Program
             telemetry.MarkFeatureUsed("settings.opened");
             settingsForm = new SettingsForm(config, controller, accountSessionManager, telemetry, ShowAuthorizationCenter, updatedConfig =>
             {
+                var previous = config.Clone();
                 var startupApplied = startupManager.SetEnabled(updatedConfig.AutoStart);
                 updatedConfig.AutoStart = updatedConfig.AutoStart ? startupApplied : !startupApplied;
+                try
+                {
+                    AppConfig.Save(updatedConfig);
+                }
+                catch
+                {
+                    if (!startupManager.SetEnabled(previous.AutoStart))
+                    {
+                        AppLogger.Warning("设置保存失败后未能恢复原开机启动任务状态，请在设置中重新确认。");
+                    }
+                    throw;
+                }
+
                 config = updatedConfig;
-                AppConfig.Save(config);
                 AppLogger.Info("设置窗口保存配置。");
                 watcher.UpdateConfig(config);
                 tray.ApplyConfig(config);
@@ -349,5 +399,19 @@ internal static class Program
         };
         owner.Show();
         MessageBox.Show(owner, message, ProductInfo.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private static bool SaveConfigBestEffort(AppConfig config, string action)
+    {
+        try
+        {
+            AppConfig.Save(config);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error($"{action}失败；程序将继续运行，下次启动可能再次执行该步骤", ex);
+            return false;
+        }
     }
 }

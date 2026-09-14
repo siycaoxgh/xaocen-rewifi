@@ -58,9 +58,28 @@ public sealed class AppConfig
 
     public static void Save(AppConfig config)
     {
+        ArgumentNullException.ThrowIfNull(config);
         config.Normalize();
         Directory.CreateDirectory(DirectoryPath);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(config, JsonOptions));
+        var temporaryPath = FilePath + ".tmp";
+        var backupPath = FilePath + ".bak";
+        try
+        {
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(config, JsonOptions));
+            if (File.Exists(FilePath))
+            {
+                File.Replace(temporaryPath, FilePath, backupPath, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(temporaryPath, FilePath);
+            }
+        }
+        finally
+        {
+            DeleteIfExistsBestEffort(temporaryPath);
+            DeleteIfExistsBestEffort(backupPath);
+        }
     }
 
     public AppConfig Clone() => new()
@@ -84,5 +103,22 @@ public sealed class AppConfig
         FailureDelaySeconds = Math.Clamp(FailureDelaySeconds, 1, 3600);
         CooldownSeconds = Math.Clamp(CooldownSeconds, 1, 86400);
         ConnectivityProbeTimeoutSeconds = Math.Clamp(ConnectivityProbeTimeoutSeconds, 1, 15);
+    }
+
+    private static void DeleteIfExistsBestEffort(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // A stale temporary backup is harmless; do not turn a successful save
+            // into a UI error only because cleanup was briefly blocked.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The next save can replace or clean the temporary files.
+        }
     }
 }

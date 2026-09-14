@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.NetworkInformation;
 using System.Security.Principal;
 using System.Text;
@@ -8,6 +9,8 @@ namespace XAOCEN.ReWiFi;
 
 public sealed class WifiController
 {
+    private static readonly Encoding NetshEncoding = CreateNetshEncoding();
+
     public async Task<WifiConnectionInfo?> DetectCurrentWifiAsync(CancellationToken cancellationToken = default)
     {
         var wirelessAdapters = NetworkInterface.GetAllNetworkInterfaces()
@@ -27,6 +30,13 @@ public sealed class WifiController
             return null;
         }
 
+        var connection = FindConnectedInterface(result.Output, wirelessAdapters);
+        if (connection is not null)
+        {
+            AppLogger.Info($"自动识别 Wi-Fi：SSID={connection.Value.Ssid}; 网卡={connection.Value.AdapterName}");
+            return connection;
+        }
+
         var ssid = FindNetshValue(result.Output, "SSID");
         if (string.IsNullOrWhiteSpace(ssid))
         {
@@ -34,10 +44,13 @@ public sealed class WifiController
             return null;
         }
 
-        var reportedName = FindNetshValue(result.Output, "Name");
-        var adapter = wirelessAdapters.FirstOrDefault(x =>
-                          string.Equals(x.Name, reportedName, StringComparison.OrdinalIgnoreCase)) ??
-                      wirelessAdapters[0];
+        if (wirelessAdapters.Count != 1)
+        {
+            AppLogger.Warning("自动识别 Wi-Fi：无法从 netsh 输出匹配网卡 GUID，且存在多块已启用无线网卡。为避免选错网卡，本次不自动填写。");
+            return null;
+        }
+
+        var adapter = wirelessAdapters[0];
         AppLogger.Info($"自动识别 Wi-Fi：SSID={ssid}; 网卡={adapter.Name}");
         return new WifiConnectionInfo(ssid, adapter.Name);
     }
@@ -127,8 +140,8 @@ public sealed class WifiController
 
     private static async Task<bool> ProfileExistsAsync(string ssid, CancellationToken cancellationToken)
     {
-        var result = await RunNetshAsync(["wlan", "show", "profiles"], cancellationToken).ConfigureAwait(false);
-        return result.Success && result.Output.Contains(ssid, StringComparison.Ordinal);
+        var result = await RunNetshAsync(["wlan", "show", "profile", $"name={ssid}"], cancellationToken).ConfigureAwait(false);
+        return result.Success;
     }
 
     private static async Task<CommandResult> RunNetshAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
@@ -144,8 +157,8 @@ public sealed class WifiController
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
+                StandardOutputEncoding = NetshEncoding,
+                StandardErrorEncoding = NetshEncoding
             }
         };
 
@@ -229,6 +242,57 @@ public sealed class WifiController
     {
         var match = Regex.Match(output, $"^\\s*{Regex.Escape(key)}\\s*:\\s*(.+?)\\s*$", RegexOptions.Multiline);
         return match.Success ? match.Groups[1].Value.Trim() : null;
+    }
+
+    private static WifiConnectionInfo? FindConnectedInterface(
+        string output,
+        IReadOnlyList<NetworkInterface> wirelessAdapters)
+    {
+        Guid? currentInterfaceId = null;
+        foreach (var line in output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var guidMatch = Regex.Match(
+                line,
+                @"(?<guid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})");
+            if (guidMatch.Success && Guid.TryParse(guidMatch.Groups["guid"].Value, out var parsedId))
+            {
+                currentInterfaceId = parsedId;
+                continue;
+            }
+
+            if (currentInterfaceId is null)
+            {
+                continue;
+            }
+
+            var ssidMatch = Regex.Match(line, @"^\s*SSID\s*:\s*(?<ssid>.+?)\s*$", RegexOptions.IgnoreCase);
+            if (!ssidMatch.Success)
+            {
+                continue;
+            }
+
+            var adapter = wirelessAdapters.FirstOrDefault(item =>
+                Guid.TryParse(item.Id, out var adapterId) && adapterId == currentInterfaceId.Value);
+            if (adapter is not null)
+            {
+                return new WifiConnectionInfo(ssidMatch.Groups["ssid"].Value.Trim(), adapter.Name);
+            }
+        }
+
+        return null;
+    }
+
+    private static Encoding CreateNetshEncoding()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        try
+        {
+            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.OEMCodePage);
+        }
+        catch
+        {
+            return Encoding.Default;
+        }
     }
 
     private readonly record struct CommandResult(bool Success, string Output, string Error);

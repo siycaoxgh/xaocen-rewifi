@@ -56,11 +56,15 @@ internal sealed class SingleInstanceCoordinator : IDisposable
                 try
                 {
                     writer.WriteLine(JsonSerializer.Serialize(request));
-                    using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                    var responseLine = reader.ReadLineAsync(timeout.Token).GetAwaiter().GetResult();
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    var responseLine = reader.ReadLineAsync(timeout.Token).AsTask().GetAwaiter().GetResult();
                     return Enum.TryParse<SingleInstanceResponse>(responseLine, ignoreCase: true, out var response)
                         ? response
                         : SingleInstanceResponse.Unavailable;
+                }
+                catch (OperationCanceledException)
+                {
+                    return SingleInstanceResponse.TimedOut;
                 }
                 catch
                 {
@@ -146,7 +150,9 @@ internal sealed class SingleInstanceCoordinator : IDisposable
             if (request is null ||
                 !string.Equals(request.Command, "activate", StringComparison.Ordinal) ||
                 string.IsNullOrWhiteSpace(request.Version) || request.Version.Length > 64 ||
+                request.BuildRevision is null ||
                 request.BuildRevision.Length > 64 ||
+                request.ExecutablePath is null ||
                 request.ExecutablePath.Length > 32_768)
             {
                 return null;
@@ -172,6 +178,7 @@ internal sealed class SingleInstanceLaunchRequest
 internal enum SingleInstanceResponse
 {
     Unavailable,
+    TimedOut,
     Activated,
     RestartApproved
 }

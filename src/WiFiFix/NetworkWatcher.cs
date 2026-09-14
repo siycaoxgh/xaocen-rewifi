@@ -120,7 +120,8 @@ public sealed class NetworkWatcher : IAsyncDisposable
             _failureStarted = null;
         }
 
-        var snapshot = NetworkSnapshot.Read(GetConfig().AdapterName);
+        var config = GetConfig();
+        var snapshot = NetworkSnapshot.Read(config.AdapterName, config.TargetSsid);
         if (snapshot.IsHealthy)
         {
             _failureStarted = null;
@@ -133,12 +134,13 @@ public sealed class NetworkWatcher : IAsyncDisposable
             ? "网络异常"
             : !snapshot.IsWifiConnected
                 ? "Wi-Fi 未连接"
+                : !snapshot.IsTargetWifiConnected
+                    ? "当前不是目标 Wi-Fi"
                 : "Wi-Fi 已连接，但无 Internet";
-        SetStatus(snapshot.IsAdapterPresent && !snapshot.IsWifiConnected
+        SetStatus(snapshot.IsAdapterPresent && (!snapshot.IsWifiConnected || !snapshot.IsTargetWifiConnected)
             ? WatcherStatus.WifiDisconnected
             : WatcherStatus.Abnormal, abnormalText);
 
-        var config = GetConfig();
         if (!config.AutoRecovery)
         {
             return;
@@ -151,12 +153,17 @@ public sealed class NetworkWatcher : IAsyncDisposable
         }
 
         // Confirm once more after the delay before touching the adapter.
-        var confirmedSnapshot = NetworkSnapshot.Read(config.AdapterName);
+        var confirmedSnapshot = NetworkSnapshot.Read(config.AdapterName, config.TargetSsid);
         if (!confirmedSnapshot.IsHealthy)
         {
-            if (!confirmedSnapshot.IsAdapterPresent || !confirmedSnapshot.IsWifiConnected)
+            if (!confirmedSnapshot.IsAdapterPresent ||
+                !confirmedSnapshot.IsWifiConnected ||
+                !confirmedSnapshot.IsTargetWifiConnected)
             {
-                AppLogger.Info("确认 Wi-Fi 物理连接已断开，准备自动恢复。");
+                var reason = !confirmedSnapshot.IsTargetWifiConnected && confirmedSnapshot.IsWifiConnected
+                    ? $"当前连接为 {confirmedSnapshot.CurrentSsid ?? "未知 SSID"}，不是目标 Wi-Fi {config.TargetSsid}"
+                    : "Wi-Fi 物理连接已断开";
+                AppLogger.Info($"确认{reason}，准备自动恢复。");
                 await TriggerRecoveryAsync(manual: false, cancellationToken).ConfigureAwait(false);
                 return;
             }
@@ -311,23 +318,190 @@ internal readonly record struct NetworkSnapshot(
     bool IsHealthy,
     bool IsAdapterPresent,
     bool IsWifiConnected,
-    bool IsInternetAvailable)
+    bool IsTargetWifiConnected,
+    bool IsInternetAvailable,
+    string? CurrentSsid)
 {
-    public static NetworkSnapshot Read(string adapterName)
+    public static NetworkSnapshot Read(string adapterName, string targetSsid)
     {
         var adapter = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(x =>
             string.Equals(x.Name, adapterName, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(x.Description, adapterName, StringComparison.OrdinalIgnoreCase));
         if (adapter is null)
         {
-            return new NetworkSnapshot(false, false, false, false);
+            return new NetworkSnapshot(false, false, false, false, false, null);
         }
 
-        var wifiConnected = adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 &&
-                            adapter.OperationalStatus == OperationalStatus.Up;
-        var internetAvailable = WindowsAdapterConnectivityReader.IsInternetAvailable(adapter.Name);
-        return new NetworkSnapshot(internetAvailable && wifiConnected, true, wifiConnected, internetAvailable);
+        var adapterUp = adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 &&
+                        adapter.OperationalStatus == OperationalStatus.Up;
+        WlanConnectionState? wlanConnection = null;
+        if (adapterUp && Guid.TryParse(adapter.Id, out var wlanAdapterId))
+        {
+            wlanConnection = WlanCurrentConnectionReader.TryRead(wlanAdapterId);
+        }
+
+        // If the native WLAN service is temporarily unavailable, retain the old
+        // adapter-up behavior instead of repeatedly cycling a healthy adapter.
+        var wifiConnected = wlanConnection?.IsConnected ?? adapterUp;
+        var currentSsid = wlanConnection?.Ssid;
+        var targetWifiConnected = wifiConnected &&
+                                  (wlanConnection is null ||
+                                   string.Equals(currentSsid, targetSsid, StringComparison.Ordinal));
+        var internetAvailable = NetworkListManagerReader.TryGetInternetAvailability();
+        internetAvailable ??= WindowsAdapterConnectivityReader.IsInternetAvailable(adapter.Name);
+        return new NetworkSnapshot(
+            internetAvailable.Value && wifiConnected && targetWifiConnected,
+            true,
+            wifiConnected,
+            targetWifiConnected,
+            internetAvailable.Value,
+            currentSsid);
     }
+}
+
+internal readonly record struct WlanConnectionState(bool IsConnected, string? Ssid);
+
+internal static class WlanCurrentConnectionReader
+{
+    private const uint WlanClientVersion = 2;
+    private const uint ErrorSuccess = 0;
+    private const uint ErrorInvalidState = 5023;
+    private const int WlanIntfOpcodeCurrentConnection = 7;
+    private const int WlanInterfaceStateConnected = 1;
+    private const int WlanInterfaceStateAdHocNetworkFormed = 2;
+
+    public static WlanConnectionState? TryRead(Guid adapterId)
+    {
+        nint clientHandle = 0;
+        nint data = 0;
+        try
+        {
+            if (WlanOpenHandle(WlanClientVersion, 0, out _, out clientHandle) != ErrorSuccess)
+            {
+                return null;
+            }
+
+            var result = WlanQueryInterface(
+                clientHandle,
+                ref adapterId,
+                WlanIntfOpcodeCurrentConnection,
+                0,
+                out _,
+                out data,
+                out _);
+            if (result == ErrorInvalidState)
+            {
+                return new WlanConnectionState(false, null);
+            }
+
+            if (result != ErrorSuccess || data == 0)
+            {
+                return null;
+            }
+
+            var attributes = Marshal.PtrToStructure<WlanConnectionAttributes>(data);
+            var connected = attributes.InterfaceState is
+                WlanInterfaceStateConnected or WlanInterfaceStateAdHocNetworkFormed;
+            if (!connected)
+            {
+                return new WlanConnectionState(false, null);
+            }
+
+            var ssidLength = Math.Min((int)attributes.AssociationAttributes.Ssid.Length, 32);
+            var ssidBytes = attributes.AssociationAttributes.Ssid.Bytes ?? [];
+            var ssid = ssidLength > 0 && ssidBytes.Length >= ssidLength
+                ? Encoding.UTF8.GetString(ssidBytes, 0, ssidLength)
+                : attributes.ProfileName;
+            return new WlanConnectionState(true, string.IsNullOrEmpty(ssid) ? null : ssid);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Warning($"读取当前 Wi-Fi SSID 失败，将回退到网卡连接状态：{ex.Message}");
+            return null;
+        }
+        finally
+        {
+            if (data != 0)
+            {
+                WlanFreeMemory(data);
+            }
+
+            if (clientHandle != 0)
+            {
+                WlanCloseHandle(clientHandle, 0);
+            }
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WlanConnectionAttributes
+    {
+        public int InterfaceState;
+        public int ConnectionMode;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string ProfileName;
+
+        public WlanAssociationAttributes AssociationAttributes;
+        public WlanSecurityAttributes SecurityAttributes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WlanAssociationAttributes
+    {
+        public Dot11Ssid Ssid;
+        public int BssType;
+        public int PhyType;
+        public uint PhyIndex;
+        public uint SignalQuality;
+        public uint RxRate;
+        public uint TxRate;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Dot11Ssid
+    {
+        public uint Length;
+
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+        public byte[] Bytes;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WlanSecurityAttributes
+    {
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool SecurityEnabled;
+
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool OneXEnabled;
+
+        public int AuthAlgorithm;
+        public int CipherAlgorithm;
+    }
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanOpenHandle(
+        uint clientVersion,
+        nint reserved,
+        out uint negotiatedVersion,
+        out nint clientHandle);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanQueryInterface(
+        nint clientHandle,
+        ref Guid interfaceGuid,
+        int opcode,
+        nint reserved,
+        out uint dataSize,
+        out nint data,
+        out int opcodeValueType);
+
+    [DllImport("wlanapi.dll")]
+    private static extern void WlanFreeMemory(nint memory);
+
+    [DllImport("wlanapi.dll")]
+    private static extern uint WlanCloseHandle(nint clientHandle, nint reserved);
 }
 
 internal static class WindowsAdapterConnectivityReader
@@ -404,60 +578,20 @@ internal static class NetworkListManagerReader
     private const int NlmConnectivityIpv4Internet = 0x40;
     private const int NlmConnectivityIpv6Internet = 0x400;
 
-    public static bool IsInternetAvailable(Guid adapterId)
+    public static bool? TryGetInternetAvailability()
     {
         try
         {
             var manager = (INetworkListManager)new NetworkListManager();
             try
             {
-                var hresult = manager.GetNetworkConnections(out var connections);
-                if (hresult < 0 || connections is null)
+                var hresult = manager.GetConnectivity(out var connectivity);
+                if (hresult < 0)
                 {
-                    return false;
+                    return null;
                 }
 
-                try
-                {
-                    while (true)
-                    {
-                        var connectionBuffer = new nint[1];
-                        uint fetched = 0;
-                        var nextResult = connections.Next(1, connectionBuffer, ref fetched);
-                        if (fetched > 0 && connectionBuffer[0] != 0)
-                        {
-                            var connection = (INetworkConnection)Marshal.GetObjectForIUnknown(connectionBuffer[0]);
-                            try
-                            {
-                                if (connection.GetAdapterId(out var connectionAdapterId) >= 0 &&
-                                    connectionAdapterId == adapterId &&
-                                    connection.GetConnectivity(out var connectivity) >= 0)
-                                {
-                                    if ((connectivity & (NlmConnectivityIpv4Internet | NlmConnectivityIpv6Internet)) != 0)
-                                    {
-                                        return true;
-                                    }
-                                }
-                            }
-                            finally
-                            {
-                                Marshal.FinalReleaseComObject(connection);
-                                Marshal.Release(connectionBuffer[0]);
-                            }
-                        }
-
-                        if (nextResult < 0 || fetched == 0)
-                        {
-                            break;
-                        }
-                    }
-
-                    return false;
-                }
-                finally
-                {
-                    Marshal.FinalReleaseComObject(connections);
-                }
+                return (connectivity & (NlmConnectivityIpv4Internet | NlmConnectivityIpv6Internet)) != 0;
             }
             finally
             {
@@ -466,10 +600,8 @@ internal static class NetworkListManagerReader
         }
         catch
         {
-            // If NLM is temporarily unavailable, prefer the conservative local
-            // adapter state instead of falsely declaring no Internet and cycling Wi-Fi.
-            AppLogger.Warning("Network List Manager 暂时不可用，回退到 Windows 本地网卡状态。");
-            return false;
+            AppLogger.Warning("Network List Manager 暂时不可用，低频回退到 PowerShell 状态读取。");
+            return null;
         }
     }
 
@@ -486,7 +618,7 @@ internal static class NetworkListManagerReader
         int GetNetwork(Guid networkId, out nint network);
 
         [PreserveSig]
-        int GetNetworkConnections([MarshalAs(UnmanagedType.Interface)] out IEnumNetworkConnections connections);
+        int GetNetworkConnections(out nint connections);
 
         [PreserveSig]
         int GetNetworkConnection(Guid connectionId, out nint connection);
@@ -501,37 +633,4 @@ internal static class NetworkListManagerReader
         int GetConnectivity(out int connectivity);
     }
 
-    [ComImport, Guid("DCB00006-570F-4A9B-8D69-199FDBA5723B"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
-    private interface IEnumNetworkConnections
-    {
-        [PreserveSig]
-        int Next(uint count,
-            [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] nint[] connections,
-            ref uint fetched);
-    }
-
-    [ComImport, Guid("DCB00005-570F-4A9B-8D69-199FDBA5723B"), InterfaceType(ComInterfaceType.InterfaceIsDual)]
-    private interface INetworkConnection
-    {
-        [PreserveSig]
-        int GetNetwork(out nint network);
-
-        [PreserveSig]
-        int IsConnectedToInternet([MarshalAs(UnmanagedType.VariantBool)] out bool connected);
-
-        [PreserveSig]
-        int IsConnected([MarshalAs(UnmanagedType.VariantBool)] out bool connected);
-
-        [PreserveSig]
-        int GetConnectivity(out int connectivity);
-
-        [PreserveSig]
-        int GetConnectionId(out Guid connectionId);
-
-        [PreserveSig]
-        int GetAdapterId(out Guid adapterId);
-
-        [PreserveSig]
-        int GetDomainType(out int domainType);
-    }
 }

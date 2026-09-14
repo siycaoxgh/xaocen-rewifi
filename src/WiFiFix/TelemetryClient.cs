@@ -130,6 +130,7 @@ internal sealed class TelemetryClient : IDisposable
     private bool _handlersInstalled;
     private bool _disposed;
     private int _flushInProgress;
+    private CancellationTokenSource _uploadCancellation = new();
 
     public event Action? StatusChanged;
 
@@ -220,11 +221,13 @@ internal sealed class TelemetryClient : IDisposable
 
     public void SetConsent(bool analytics, bool crash, bool allUploadsDisabled)
     {
+        CancellationTokenSource? uploadsToCancel = null;
         lock (_sync)
         {
             ThrowIfDisposed();
             var previousAnalytics = _state.AnalyticsConsent;
             var previousCrash = _state.CrashConsent;
+            var uploadsWereDisabled = _state.AllUploadsDisabled;
             _state.AnalyticsConsent = analytics;
             _state.CrashConsent = crash;
             _state.AllUploadsDisabled = allUploadsDisabled;
@@ -232,10 +235,34 @@ internal sealed class TelemetryClient : IDisposable
 
             if (allUploadsDisabled)
             {
+                if (!uploadsWereDisabled)
+                {
+                    uploadsToCancel = _uploadCancellation;
+                    _uploadCancellation = new CancellationTokenSource();
+                }
+
                 _queue.Clear();
+                // Keep only the user's preference and the current version baseline.
+                // No deferred event may be reconstructed from activity observed while
+                // the all-uploads switch is enabled.
+                _state.FirstObservedAt = null;
+                _state.PendingPreviousVersion = null;
+                _state.LastVersion = AppLogger.Version;
+                _state.ActivationObservedAt = null;
+                _state.ActivationNetworkState = null;
+                _sessionStarted = false;
+                _featureCount = 0;
+                _completedCoreAction = false;
             }
             else
             {
+                if (uploadsWereDisabled && !_state.FirstRunRecorded)
+                {
+                    // If this instance has never reported a first run, begin a new
+                    // observation window only after uploads are enabled again.
+                    _state.FirstObservedAt = DateTimeOffset.UtcNow;
+                }
+
                 if (!analytics)
                 {
                     _queue.RemoveAll(item => IsEnhancedEvent(item.EventName));
@@ -259,6 +286,8 @@ internal sealed class TelemetryClient : IDisposable
             _store.SaveQueue(_queue);
         }
 
+        uploadsToCancel?.Cancel();
+
         NotifyStatusChanged();
         RequestFlush();
     }
@@ -269,7 +298,7 @@ internal sealed class TelemetryClient : IDisposable
         {
             ThrowIfDisposed();
             _state.InstanceId = Guid.NewGuid().ToString();
-            _state.FirstObservedAt = DateTimeOffset.UtcNow;
+            _state.FirstObservedAt = _state.AllUploadsDisabled ? null : DateTimeOffset.UtcNow;
             _state.FirstRunRecorded = false;
             _state.ActivationObservedAt = null;
             _state.ActivationNetworkState = null;
@@ -339,6 +368,11 @@ internal sealed class TelemetryClient : IDisposable
         lock (_sync)
         {
             ThrowIfDisposed();
+            if (!TelemetryBuild.IsEnabled || _state.AllUploadsDisabled)
+            {
+                return;
+            }
+
             if (_state.ActivationObservedAt is null)
             {
                 _state.ActivationObservedAt = DateTimeOffset.UtcNow;
@@ -435,9 +469,24 @@ internal sealed class TelemetryClient : IDisposable
 
         try
         {
+            CancellationToken uploadCancellation;
+            lock (_sync)
+            {
+                if (_state.AllUploadsDisabled)
+                {
+                    return new TelemetryFlushResult(0, 0, 0);
+                }
+
+                uploadCancellation = _uploadCancellation.Token;
+            }
+
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                uploadCancellation);
+            var effectiveCancellation = linkedCancellation.Token;
             var initialCount = GetStatus().QueuedEvents;
             var sent = 0;
-            while (!cancellationToken.IsCancellationRequested)
+            while (!effectiveCancellation.IsCancellationRequested)
             {
                 TelemetryEventDocument[] batch;
                 lock (_sync)
@@ -450,7 +499,7 @@ internal sealed class TelemetryClient : IDisposable
                     break;
                 }
 
-                var outcome = await SendBatchAsync(batch, cancellationToken).ConfigureAwait(false);
+                var outcome = await SendBatchAsync(batch, effectiveCancellation).ConfigureAwait(false);
                 if (outcome == TelemetrySendOutcome.TemporaryFailure)
                 {
                     break;
@@ -470,7 +519,7 @@ internal sealed class TelemetryClient : IDisposable
 
             return new TelemetryFlushResult(initialCount, sent, GetStatus().QueuedEvents);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             var queued = GetStatus().QueuedEvents;
             return new TelemetryFlushResult(queued, 0, queued);
@@ -536,6 +585,8 @@ internal sealed class TelemetryClient : IDisposable
             }
 
             _disposed = true;
+            _uploadCancellation.Cancel();
+            _uploadCancellation.Dispose();
             _httpClient.Dispose();
         }
     }
@@ -549,8 +600,19 @@ internal sealed class TelemetryClient : IDisposable
                 _state.InstanceId = Guid.NewGuid().ToString();
             }
 
-            _state.FirstObservedAt ??= DateTimeOffset.UtcNow;
             var currentVersion = AppLogger.Version;
+            if (_state.AllUploadsDisabled)
+            {
+                _state.FirstObservedAt = null;
+                _state.PendingPreviousVersion = null;
+                _state.LastVersion = currentVersion;
+                _state.ActivationObservedAt = null;
+                _state.ActivationNetworkState = null;
+                _store.SaveState(_state);
+                return;
+            }
+
+            _state.FirstObservedAt ??= DateTimeOffset.UtcNow;
             if (!string.IsNullOrWhiteSpace(_state.LastVersion) &&
                 !string.Equals(_state.LastVersion, currentVersion, StringComparison.OrdinalIgnoreCase))
             {
@@ -738,11 +800,27 @@ internal sealed class TelemetryClient : IDisposable
 
                 if (response.StatusCode == HttpStatusCode.Created)
                 {
-                    var result = JsonSerializer.Deserialize<TelemetryResponseDocument>(responseBody, JsonOptions);
+                    TelemetryResponseDocument? result;
+                    try
+                    {
+                        result = JsonSerializer.Deserialize<TelemetryResponseDocument>(responseBody, JsonOptions);
+                    }
+                    catch (JsonException exception)
+                    {
+                        AppLogger.Warning($"遥测服务返回 201，但响应格式无效：{exception.GetType().Name}");
+                        if (attempt == 2)
+                        {
+                            return TelemetrySendOutcome.TemporaryFailure;
+                        }
+
+                        await Task.Delay(GetRetryDelay(response, attempt), cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
                     if (result is null)
                     {
-                        AppLogger.Warning("遥测服务返回 201，但响应格式无法解析；当前批次将丢弃。");
-                        return TelemetrySendOutcome.PermanentFailure;
+                        AppLogger.Warning("遥测服务返回 201，但响应正文为空；当前批次将保留待后续重试。");
+                        return TelemetrySendOutcome.TemporaryFailure;
                     }
 
                     if (result.Rejected is { Count: > 0 })

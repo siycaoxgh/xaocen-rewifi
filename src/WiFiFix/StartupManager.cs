@@ -10,8 +10,7 @@ public sealed class StartupManager
 
     public bool IsEnabled()
     {
-        var result = RunSchtasks(["/Query", "/TN", TaskName, "/FO", "CSV", "/NH"]);
-        return result.ExitCode == 0;
+        return QueryTaskState() == StartupTaskState.Enabled;
     }
 
     public bool SetEnabled(bool enabled)
@@ -21,8 +20,13 @@ public sealed class StartupManager
             return CreateTask();
         }
 
-        // Disabling an already absent task is still a successful, idempotent result.
-        return !IsEnabled() || DeleteTask();
+        var state = QueryTaskState();
+        return state switch
+        {
+            StartupTaskState.Missing => true,
+            StartupTaskState.Enabled or StartupTaskState.Disabled => DeleteTask(),
+            _ => false
+        };
     }
 
     public bool EnsureCurrentExecutable()
@@ -34,7 +38,8 @@ public sealed class StartupManager
         }
 
         var configuredPath = GetConfiguredExecutablePath();
-        if (!IsEnabled() || !string.Equals(configuredPath, executablePath, StringComparison.OrdinalIgnoreCase))
+        if (QueryTaskState() != StartupTaskState.Enabled ||
+            !string.Equals(configuredPath, executablePath, StringComparison.OrdinalIgnoreCase))
         {
             return CreateTask();
         }
@@ -61,7 +66,7 @@ public sealed class StartupManager
             return null;
         }
 
-        return match.Groups[1].Value.Trim();
+        return System.Net.WebUtility.HtmlDecode(match.Groups[1].Value.Trim());
     }
 
     private static bool CreateTask()
@@ -92,6 +97,27 @@ public sealed class StartupManager
 
     private static bool DeleteTask(string taskName) => RunSchtasks(["/Delete", "/TN", taskName, "/F"]).ExitCode == 0;
 
+    private static StartupTaskState QueryTaskState()
+    {
+        const string script = "$task = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -eq 'XAOCEN ReWiFi' } | Select-Object -First 1); if ($task.Count -eq 0) { 'MISSING' } elseif ([int]$task[0].State -eq 1) { 'DISABLED' } else { 'ENABLED' }";
+        var result = RunPowerShell(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script]);
+        if (result.ExitCode != 0)
+        {
+            AppLogger.Warning($"查询开机任务状态失败：{result.Output}");
+            return StartupTaskState.Unknown;
+        }
+
+        var marker = result.Output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault()?.Trim();
+        return marker switch
+        {
+            "ENABLED" => StartupTaskState.Enabled,
+            "DISABLED" => StartupTaskState.Disabled,
+            "MISSING" => StartupTaskState.Missing,
+            _ => StartupTaskState.Unknown
+        };
+    }
+
     private static bool ConfigurePowerSettings()
     {
         var command = $"$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; Set-ScheduledTask -TaskName '{TaskName}' -Settings $settings";
@@ -105,46 +131,18 @@ public sealed class StartupManager
     }
 
     private static (int ExitCode, string Output) RunSchtasks(IReadOnlyList<string> arguments)
-    {
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "schtasks.exe",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
-        }
-        ;
-
-        foreach (var argument in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(argument);
-        }
-
-        try
-        {
-            if (!process.Start()) return (-1, string.Empty);
-            var output = process.StandardOutput.ReadToEnd();
-            output += process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            return (process.ExitCode, output);
-        }
-        catch
-        {
-            return (-1, string.Empty);
-        }
-    }
+        => RunProcess("schtasks.exe", arguments);
 
     private static (int ExitCode, string Output) RunPowerShell(IReadOnlyList<string> arguments)
+        => RunProcess("powershell.exe", arguments);
+
+    private static (int ExitCode, string Output) RunProcess(string fileName, IReadOnlyList<string> arguments)
     {
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "powershell.exe",
+                FileName = fileName,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -160,14 +158,40 @@ public sealed class StartupManager
         try
         {
             if (!process.Start()) return (-1, string.Empty);
-            var output = process.StandardOutput.ReadToEnd();
-            output += process.StandardError.ReadToEnd();
-            process.WaitForExit();
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(milliseconds: 10_000))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(milliseconds: 1_000);
+                }
+                catch
+                {
+                    // The command may have exited while the timeout was handled.
+                }
+
+                AppLogger.Warning($"系统命令执行超过 10 秒，已终止：{fileName}");
+                return (-1, "命令执行超时。");
+            }
+
+            Task.WhenAll(outputTask, errorTask).GetAwaiter().GetResult();
+            var output = outputTask.Result + errorTask.Result;
             return (process.ExitCode, output);
         }
-        catch
+        catch (Exception ex)
         {
+            AppLogger.Error($"系统命令执行失败：{fileName}", ex);
             return (-1, string.Empty);
         }
+    }
+
+    private enum StartupTaskState
+    {
+        Unknown,
+        Missing,
+        Disabled,
+        Enabled
     }
 }
