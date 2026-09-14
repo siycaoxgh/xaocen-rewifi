@@ -512,7 +512,7 @@ internal sealed class AccountSessionManager : IDisposable
             SetStatus("XAOCEN Account 授权超时");
             throw new AccountAuthorizationException("设备授权等待超时，请重新发起授权。");
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             SetStatus("XAOCEN Account 授权已取消");
             PublishAuthorizationResult(new AccountAuthorizationResult(false, "online", "cancelled"));

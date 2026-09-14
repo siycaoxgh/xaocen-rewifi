@@ -48,7 +48,7 @@ public sealed class SettingsForm : Form
         MinimizeBox = true;
         ShowInTaskbar = true;
         Icon = LoadApplicationIcon();
-        ClientSize = new Size(1040, 810);
+        ClientSize = new Size(1040, 840);
         _ssidTextBox.Text = _initialConfig.TargetSsid;
         _adapterTextBox.Text = _initialConfig.AdapterName;
 
@@ -60,11 +60,11 @@ public sealed class SettingsForm : Form
             RowCount = 6,
             AutoScroll = true
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 164));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 218));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
@@ -311,10 +311,10 @@ public sealed class SettingsForm : Form
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var consent = _telemetry.Consent;
         var baseSummary = new Label
@@ -331,25 +331,28 @@ public sealed class SettingsForm : Form
         _analyticsConsent.Text = "增强匿名分析（可选）";
         _analyticsConsent.Checked = consent.Analytics;
         _analyticsConsent.AutoSize = true;
-        _analyticsConsent.Margin = new Padding(0);
+        _analyticsConsent.Anchor = AnchorStyles.Left;
+        _analyticsConsent.Margin = new Padding(0, 4, 0, 4);
         _crashConsent.Text = "匿名崩溃报告（可选）";
         _crashConsent.Checked = consent.Crash;
         _crashConsent.AutoSize = true;
-        _crashConsent.Margin = new Padding(0);
+        _crashConsent.Anchor = AnchorStyles.Left;
+        _crashConsent.Margin = new Padding(0, 4, 0, 4);
         _disableAllTelemetry.Text = "禁止所有统计上传";
         _disableAllTelemetry.Checked = consent.AllUploadsDisabled;
         _disableAllTelemetry.AutoSize = true;
-        _disableAllTelemetry.Margin = new Padding(0);
-        var enabled = _telemetry.GetStatus().IsTestBuild;
-        _analyticsConsent.Enabled = enabled && !consent.AllUploadsDisabled;
-        _crashConsent.Enabled = enabled && !consent.AllUploadsDisabled;
-        _disableAllTelemetry.Enabled = enabled;
+        _disableAllTelemetry.Anchor = AnchorStyles.Left;
+        _disableAllTelemetry.Margin = new Padding(0, 4, 0, 4);
+        var telemetryAvailable = _telemetry.GetStatus().IsEnabled;
+        _analyticsConsent.Enabled = telemetryAvailable && !consent.AllUploadsDisabled;
+        _crashConsent.Enabled = telemetryAvailable && !consent.AllUploadsDisabled;
+        _disableAllTelemetry.Enabled = telemetryAvailable;
         table.Controls.Add(_analyticsConsent, 0, 1);
         table.Controls.Add(_crashConsent, 1, 1);
         table.Controls.Add(_disableAllTelemetry, 0, 2);
         _disableAllTelemetry.CheckedChanged += (_, _) =>
         {
-            var controlsEnabled = enabled && !_disableAllTelemetry.Checked;
+            var controlsEnabled = telemetryAvailable && !_disableAllTelemetry.Checked;
             _analyticsConsent.Enabled = controlsEnabled;
             _crashConsent.Enabled = controlsEnabled;
         };
@@ -383,7 +386,7 @@ public sealed class SettingsForm : Form
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Microsoft YaHei UI", 8.5F),
             ForeColor = Color.FromArgb(80, 92, 104),
-            Margin = new Padding(0)
+            Margin = new Padding(0, 4, 0, 0)
         };
         table.Controls.Add(privacyNote, 0, 3);
         table.SetColumnSpan(privacyNote, 3);

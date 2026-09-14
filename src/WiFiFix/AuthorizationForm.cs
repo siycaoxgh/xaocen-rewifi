@@ -12,7 +12,9 @@ internal sealed class AuthorizationForm : Form
     private readonly Label _offlineDetails = CreateDetailsLabel();
     private readonly TextBox _licenseTextBox = new();
     private readonly System.Windows.Forms.Timer _authorizationProgressTimer = new() { Interval = 1000 };
-    private CancellationTokenSource _closeCancellation = new();
+    private readonly CancellationTokenSource _closeCancellation = new();
+    private CancellationTokenSource? _authorizationCancellation;
+    private Button? _cancelAuthorizationButton;
     private DeviceAuthorizationProgress? _authorizationProgress;
 
     public AuthorizationForm(
@@ -32,7 +34,7 @@ internal sealed class AuthorizationForm : Form
         ShowInTaskbar = false;
         Icon = LoadApplicationIcon();
         BackColor = Color.FromArgb(247, 249, 251);
-        ClientSize = new Size(1040, 810);
+        ClientSize = new Size(1040, 840);
 
         var root = new TableLayoutPanel
         {
@@ -92,13 +94,18 @@ internal sealed class AuthorizationForm : Form
             }
         };
         _authorizationProgressTimer.Start();
+        FormClosing += (_, _) =>
+        {
+            _authorizationCancellation?.Cancel();
+            _closeCancellation.Cancel();
+        };
         FormClosed += (_, _) =>
         {
             _accountSessionManager.StatusChanged -= AccountSessionStatusChanged;
             _accountSessionManager.AuthorizationProgressChanged -= AccountAuthorizationProgressChanged;
             _authorizationProgressTimer.Stop();
             _authorizationProgressTimer.Dispose();
-            _closeCancellation.Cancel();
+            _authorizationCancellation?.Dispose();
             _closeCancellation.Dispose();
         };
     }
@@ -140,15 +147,18 @@ internal sealed class AuthorizationForm : Form
 
         var authorizeButton = CreateButton("登录账号", Color.FromArgb(224, 239, 248));
         authorizeButton.Click += async (_, _) => await AuthorizeAsync(authorizeButton);
+        _cancelAuthorizationButton = CreateButton("取消登录");
+        _cancelAuthorizationButton.Enabled = false;
+        _cancelAuthorizationButton.Click += (_, _) => CancelAuthorization();
         var logoutButton = CreateButton("退出账号");
         logoutButton.Click += async (_, _) => await EndAccountAsync(logoutButton, revoke: false);
         var revokeButton = CreateButton("撤销此设备");
         revokeButton.Click += async (_, _) => await EndAccountAsync(revokeButton, revoke: true);
-        var actions = CreateActions(authorizeButton, logoutButton, revokeButton);
+        var actions = CreateActions(authorizeButton, _cancelAuthorizationButton, logoutButton, revokeButton);
         table.Controls.Add(actions, 0, 2);
         table.SetColumnSpan(actions, 2);
 
-        var note = CreateNoteLabel("浏览器只负责登录和批准设备；Account 页面会自动刷新并显示等待、已批准、已完成、拒绝或过期状态。授权完成后可以关闭浏览器，再返回本窗口查看“已连接”状态。\n\n登录用于账号识别；反馈网页可能仍需单独登录。统计偏好在设置中独立管理。", 4);
+        var note = CreateNoteLabel("浏览器只负责登录和批准设备；Account 页面会自动刷新并显示等待、已批准、已完成、拒绝或过期状态。授权完成后可以关闭浏览器，再返回本窗口查看“已连接”状态。\n\n如需切换浏览器中的账号，请先点击“取消登录”，再重新发起登录。登录用于账号识别；反馈网页可能仍需单独登录。统计偏好在设置中独立管理。", 4);
         table.Controls.Add(note, 0, 3);
         table.SetColumnSpan(note, 2);
         group.Controls.Add(table);
@@ -157,26 +167,72 @@ internal sealed class AuthorizationForm : Form
 
     private async Task AuthorizeAsync(Button button)
     {
-        await RunButtonOperationAsync(button, "授权中……", async () =>
+        if (_authorizationCancellation is not null)
         {
-            try
+            return;
+        }
+
+        var authorizationCancellation = CancellationTokenSource.CreateLinkedTokenSource(_closeCancellation.Token);
+        _authorizationCancellation = authorizationCancellation;
+        var originalText = button.Text;
+        button.Text = "验证中……";
+        button.Enabled = false;
+        if (_cancelAuthorizationButton is not null)
+        {
+            _cancelAuthorizationButton.Enabled = true;
+        }
+
+        try
+        {
+            await _accountSessionManager.AuthorizeAsync(authorizationCancellation.Token);
+            RefreshState();
+        }
+        catch (OperationCanceledException)
+        {
+            _authorizationProgress = null;
+            if (!IsDisposed && !_closeCancellation.IsCancellationRequested)
             {
-                await _accountSessionManager.AuthorizeAsync(_closeCancellation.Token);
-                RefreshState();
+                SetAccountStatus("登录已取消", "没有建立新的账号会话，可以重新点击“登录账号”。", Color.DarkOrange);
             }
-            catch (OperationCanceledException) when (!_closeCancellation.IsCancellationRequested)
+        }
+        catch (Exception ex)
+        {
+            _authorizationProgress = null;
+            if (!IsDisposed)
             {
-                _authorizationProgress = null;
-                SetAccountStatus("授权已取消", "没有建立新的账号会话。", Color.DarkOrange);
-            }
-            catch (Exception ex)
-            {
-                _authorizationProgress = null;
-                SetAccountStatus("授权失败", ex.Message, Color.Firebrick);
-                MessageBox.Show(this, $"XAOCEN Account 授权失败：{ex.Message}", ProductInfo.ProductName,
+                SetAccountStatus("登录失败", ex.Message, Color.Firebrick);
+                MessageBox.Show(this, $"XAOCEN Account 登录失败：{ex.Message}", ProductInfo.ProductName,
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-        });
+        }
+        finally
+        {
+            if (ReferenceEquals(_authorizationCancellation, authorizationCancellation))
+            {
+                _authorizationCancellation = null;
+            }
+            authorizationCancellation.Dispose();
+            if (!IsDisposed)
+            {
+                button.Text = originalText;
+                button.Enabled = true;
+                if (_cancelAuthorizationButton is not null)
+                {
+                    _cancelAuthorizationButton.Enabled = false;
+                }
+            }
+        }
+    }
+
+    private void CancelAuthorization()
+    {
+        if (_authorizationCancellation is null || _authorizationCancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        SetAccountStatus("正在取消登录", "正在停止当前设备授权请求，请稍候……", Color.DarkOrange);
+        _authorizationCancellation.Cancel();
     }
 
     private async Task EndAccountAsync(Button button, bool revoke)
