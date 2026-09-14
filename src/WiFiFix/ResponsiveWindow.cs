@@ -6,6 +6,26 @@ internal static class ResponsiveWindow
 {
     private const int ScreenMargin = 24;
 
+    public static Panel CreateScrollableViewport(Control content, int minimumContentHeight)
+    {
+        var viewport = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            BackColor = content.BackColor,
+            AutoScrollMinSize = new Size(0, minimumContentHeight)
+        };
+        content.Dock = DockStyle.Top;
+        content.MinimumSize = new Size(0, minimumContentHeight);
+        content.Height = minimumContentHeight;
+        viewport.Controls.Add(content);
+        viewport.Resize += (_, _) =>
+        {
+            content.Height = Math.Max(minimumContentHeight, viewport.ClientSize.Height);
+        };
+        return viewport;
+    }
+
     public static void FitToWorkingArea(Form form)
     {
         var workingArea = Screen.FromControl(form).WorkingArea;

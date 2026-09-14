@@ -32,11 +32,11 @@ internal sealed class AuthorizationForm : Form
 
         var root = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             Padding = new Padding(18),
             ColumnCount = 1,
             RowCount = 3,
-            AutoScroll = true
+            AutoScroll = false
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -76,7 +76,7 @@ internal sealed class AuthorizationForm : Form
         buttonPanel.Resize += (_, _) => closeButton.Left = buttonPanel.ClientSize.Width - closeButton.Width;
         root.Controls.Add(buttonPanel, 0, 2);
 
-        Controls.Add(root);
+        Controls.Add(ResponsiveWindow.CreateScrollableViewport(root, 650));
         AcceptButton = closeButton;
         Shown += (_, _) =>
         {

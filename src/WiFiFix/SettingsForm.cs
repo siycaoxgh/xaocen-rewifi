@@ -55,11 +55,11 @@ public sealed class SettingsForm : Form
 
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
             Padding = new Padding(14, 10, 14, 14),
             ColumnCount = 1,
             RowCount = 6,
-            AutoScroll = true
+            AutoScroll = false
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 196));
@@ -197,7 +197,7 @@ public sealed class SettingsForm : Form
         };
         layout.Controls.Add(buttonBar, 0, 5);
 
-        Controls.Add(layout);
+        Controls.Add(ResponsiveWindow.CreateScrollableViewport(layout, 868));
         AcceptButton = saveButton;
         Shown += (_, _) =>
         {
