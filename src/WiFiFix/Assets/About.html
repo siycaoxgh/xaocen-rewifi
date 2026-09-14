@@ -103,7 +103,7 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
 %LOCALAPPDATA%\XAOCEN ReWiFi\telemetry\queue.json</code></pre>
     <p>基础运行统计仅记录首次运行、启动、版本更新和核心激活规模，不上传系统版本、架构、网络或设备详情。遥测不要求 XAOCEN Account 登录，不上传账号、令牌、授权内容、SSID、网卡名称、MAC、IP、完整日志或文件内容。正式版设置页可单独勾选增强匿名分析和匿名崩溃报告；选择禁止所有数据上传后，这两个选项会暂时停用，且不会产生、缓存或发送任何遥测事件。</p>
     <p>配置文件：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\config.json</code></pre>
-    <p>账号刷新令牌和设备登记密钥保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。替换 EXE 不会清空账号会话凭据；历史版本留下的 <code>offline-license.xaocen-license</code> 文件不会被自动删除，但 v2.3 不读取它，也不以它判断功能可用性。</p>
+    <p>账号刷新令牌和设备登记密钥保存在当前 Windows 用户的 Credential Manager：<code>XAOCEN.ReWiFi/auth.xaocen.studio</code>、<code>XAOCEN.ReWiFi/offline-device-key</code>。第二个名称为兼容旧版本沿用的凭据目标，当前仅用于 Account 设备登记，不代表启用了离线授权。替换 EXE 不会清空账号会话凭据；历史版本留下的 <code>offline-license.xaocen-license</code> 文件不会被自动删除，但 v2.3 不读取它，也不以它判断功能可用性。</p>
     <p>本地产品介绍页面：</p><pre><code>%LOCALAPPDATA%\XAOCEN ReWiFi\XAOCEN-ReWiFi-介绍.html</code></pre>
 
     <h2>限制</h2>
@@ -111,7 +111,7 @@ dotnet publish .\src\WiFiFix\WiFiFix.csproj -c Release -r win-x64 --self-contain
 
     <h2>更新日志</h2>
     <h3>v2.3 · 2026-09-14</h3>
-    <ul><li>修复正式发布构建中增强匿名分析、匿名崩溃报告和禁止所有统计上传无法选择的问题。</li><li>账号登录增加“取消登录”；切换浏览器账号时可取消旧请求后重新登录，关闭账号中心也会终止轮询。</li><li>重构设置窗口和账号中心布局，取消悬浮按钮与固定内容挤压；窗口可调整大小，并在不同分辨率和缩放比例下自动适配。</li><li>两个窗口使用独立滚动视口和最小内容高度；上下缩小窗口时显示右侧滚动条，恢复高度后自动隐藏。</li><li>增加账号操作按钮区的底部留白，避免按钮边框贴近分组边界或被遮挡。</li><li>“打开账号中心”收回账号信息卡片，“保存”固定在底部操作栏；额外空间优先分配给隐私说明，避免底部文字被裁切。</li><li>账号中心改为全局单一窗口，从设置页、托盘或重复点击进入时只会唤醒已有窗口。</li><li>产品帮助、用户协议和隐私说明统一使用 6 秒在线检查；官网可达时打开浏览器，不可达时回退内置副本。</li><li>删除与“退出账号”实际效果重复且容易误解的“撤销此设备”按钮；其他设备统一在 Account 网页管理。</li></ul>
+    <ul><li>修复正式发布构建中增强匿名分析、匿名崩溃报告和禁止所有统计上传无法选择的问题。</li><li>账号登录增加“取消登录”；切换浏览器账号时可取消旧请求后重新登录，关闭账号中心也会终止轮询。</li><li>重构设置窗口和账号中心布局，取消悬浮按钮与固定内容挤压；窗口可调整大小，并在不同分辨率和缩放比例下自动适配。</li><li>两个窗口使用独立滚动视口和最小内容高度；上下缩小窗口时显示右侧滚动条，恢复高度后自动隐藏。</li><li>增加账号操作按钮区的底部留白，避免按钮边框贴近分组边界或被遮挡。</li><li>“打开账号中心”收回账号信息卡片，“保存”固定在底部操作栏；额外空间优先分配给隐私说明，避免底部文字被裁切。</li><li>账号中心改为全局单一窗口，从设置页、托盘或重复点击进入时只会唤醒已有窗口。</li><li>产品帮助、用户协议和隐私说明统一使用 6 秒在线检查；官网可达时打开浏览器，不可达时回退内置副本。</li><li>删除与“退出账号”实际效果重复且容易误解的“撤销此设备”按钮；其他设备统一在 Account 网页管理。</li><li>恢复流程在退出或升级中断时增加网卡重新启用兜底，避免 Wi-Fi 停留在禁用状态。</li><li>账号离线退出仍会清理本机凭据；旧离线授权与二维码源码不再参与当前发布编译，设备公钥由独立身份服务维护。</li><li>开机启动状态按任务实际结果判断，复制脱敏诊断信息增加内部构建号。</li></ul>
     <h3>v1.5 · 2026-08-22</h3>
     <ul><li>修复 <code>WifiController.IsAdministrator()</code> 在正式发布包中缺少 <code>System.Security.Principal.Windows</code> 程序集、导致自动恢复流程异常的问题。</li><li>固化 <code>win-x64</code> self-contained 单文件发布配置，并核对正式发布包的依赖完整性。</li><li>修复连通性探测继承本机代理的问题，探测现在绕过系统代理、<code>HTTP_PROXY</code>、<code>HTTPS_PROXY</code> 和 <code>ALL_PROXY</code> 环境变量。</li><li>增加回归测试，覆盖代理端口不可用、真实不可达、直连处理器和 Windows 权限程序集加载场景。</li><li>保留 v1.4 至 v0.1 的历史更新记录，并将本次工程修复、测试和发布结果记录为 v1.5。</li></ul>
 

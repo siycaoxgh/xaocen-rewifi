@@ -107,7 +107,7 @@ public sealed class SettingsForm : Form
             ActiveLinkColor = Color.FromArgb(20, 196, 211),
             VisitedLinkColor = Color.FromArgb(8, 123, 192)
         };
-        githubLink.LinkClicked += (_, _) => OpenExternalUrl(ProductInfo.GitHubUrl);
+        githubLink.LinkClicked += (_, _) => OpenExternalUrl(ProductInfo.GitHubReleasesUrl);
         overviewActions.Controls.Add(githubLink);
         overview.Controls.Add(overviewActions, 1, 1);
         layout.Controls.Add(overview, 0, 0);
@@ -519,40 +519,6 @@ public sealed class SettingsForm : Form
         {
             // The settings form can close while a background authorization check completes.
         }
-    }
-
-    private static string FormatEntitlementStatus(string? status) => status switch
-    {
-        "active" => "有效",
-        "expired" => "已过期",
-        "revoked" => "已撤销",
-        _ => string.IsNullOrWhiteSpace(status) ? "未知" : status
-    };
-
-    private static string FormatEntitlementExpiry(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "永久" : FormatAuthorizationDate(value);
-
-    private static string FormatLicenseType(string? value) => value switch
-    {
-        "perpetual" => "永久授权",
-        "subscription" => "订阅授权",
-        "trial" => "试用授权",
-        "public_test" => "公开测试授权",
-        _ => string.IsNullOrWhiteSpace(value) ? "未知类型" : value
-    };
-
-    private static string FormatAuthorizationDate(string? value)
-    {
-        return DateTimeOffset.TryParse(value, out var timestamp)
-            ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
-            : string.IsNullOrWhiteSpace(value) ? "未知" : value;
-    }
-
-    private static string FormatAuthorizationDate(DateTimeOffset? value)
-    {
-        return value is { } timestamp
-            ? timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
-            : "未设置";
     }
 
     private void AddField(TableLayoutPanel layout, int row, string labelText, Control control, string suffix = "")

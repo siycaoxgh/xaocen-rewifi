@@ -35,7 +35,6 @@ internal static class TelemetryEventNames
     public const string FeatureUsed = "feature.used";
     public const string ActivationSuccess = "activation.success";
     public const string ActivationFailure = "activation.failure";
-    public const string EntitlementChecked = "entitlement.checked";
     public const string CrashReported = "crash.reported";
     public const string OptOut = "telemetry.opt_out";
 }
@@ -91,7 +90,6 @@ internal sealed class TelemetryClient : IDisposable
             [TelemetryEventNames.FeatureUsed] = new(StringComparer.Ordinal) { "feature", "count" },
             [TelemetryEventNames.ActivationSuccess] = new(StringComparer.Ordinal) { "authorizationMode", "entitlementType", "networkState" },
             [TelemetryEventNames.ActivationFailure] = new(StringComparer.Ordinal) { "authorizationMode", "errorCode", "networkState" },
-            [TelemetryEventNames.EntitlementChecked] = new(StringComparer.Ordinal) { "authorizationMode", "result", "errorCode" },
             [TelemetryEventNames.CrashReported] = new(StringComparer.Ordinal) { "exceptionType", "errorCode", "message", "stack", "phase", "native" },
             [TelemetryEventNames.OptOut] = new(StringComparer.Ordinal) { "scope" }
         };
@@ -356,24 +354,11 @@ internal sealed class TelemetryClient : IDisposable
     public void RecordActivationFailure(string authorizationMode, string errorCode, string networkState)
     {
         if (Track(TelemetryEventNames.ActivationFailure, new Dictionary<string, object?>
-            {
-                ["authorizationMode"] = authorizationMode,
-                ["errorCode"] = errorCode,
-                ["networkState"] = networkState
-            }))
         {
-            RequestFlush();
-        }
-    }
-
-    public void RecordEntitlementCheck(string authorizationMode, string result, string? errorCode = null)
-    {
-        if (Track(TelemetryEventNames.EntitlementChecked, new Dictionary<string, object?>
-            {
-                ["authorizationMode"] = authorizationMode,
-                ["result"] = result,
-                ["errorCode"] = errorCode
-            }))
+            ["authorizationMode"] = authorizationMode,
+            ["errorCode"] = errorCode,
+            ["networkState"] = networkState
+        }))
         {
             RequestFlush();
         }
@@ -382,10 +367,10 @@ internal sealed class TelemetryClient : IDisposable
     public void MarkFeatureUsed(string feature, int count = 1)
     {
         if (Track(TelemetryEventNames.FeatureUsed, new Dictionary<string, object?>
-            {
-                ["feature"] = feature,
-                ["count"] = count
-            }))
+        {
+            ["feature"] = feature,
+            ["count"] = count
+        }))
         {
             lock (_sync)
             {
@@ -847,8 +832,7 @@ internal sealed class TelemetryClient : IDisposable
     private static bool IsEnhancedEvent(string eventName) => eventName is
         TelemetryEventNames.SessionSummary or
         TelemetryEventNames.FeatureUsed or
-        TelemetryEventNames.ActivationFailure or
-        TelemetryEventNames.EntitlementChecked;
+        TelemetryEventNames.ActivationFailure;
 
     private static string? GetOptOutScope(bool previousAnalytics, bool previousCrash, bool analytics, bool crash)
     {

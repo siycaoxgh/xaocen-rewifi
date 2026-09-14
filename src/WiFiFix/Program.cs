@@ -76,8 +76,8 @@ internal static class Program
 
         var controller = new WifiController();
         var accountClient = new AccountClient();
-        var offlineAuthorizationManager = new OfflineAuthorizationManager(accountClient);
-        var accountSessionManager = new AccountSessionManager(accountClient, devicePublicKeyProvider: offlineAuthorizationManager.GetDevicePublicKey);
+        var deviceIdentity = new DeviceIdentityService();
+        var accountSessionManager = new AccountSessionManager(accountClient, devicePublicKeyProvider: deviceIdentity.GetOrCreatePublicKey);
         var watcher = new NetworkWatcher(config, controller, new ConnectivityProbe());
         var tray = new TrayManager(config);
         using var instanceCoordinator = new SingleInstanceCoordinator();

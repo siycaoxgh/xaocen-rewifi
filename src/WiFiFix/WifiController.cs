@@ -67,36 +67,51 @@ public sealed class WifiController
                 $"无法连接 {config.TargetSsid}。请先使用 Windows 手动连接一次该 Wi-Fi，并保存网络。", notify: true);
         }
 
-        var disabled = await RunNetshAsync(
-            ["interface", "set", "interface", $"name={config.AdapterName}", "admin=disabled"], cancellationToken)
-            .ConfigureAwait(false);
-        if (!disabled.Success)
+        var adapterMayBeDisabled = false;
+        try
         {
-            return RecoveryResult.Failed($"关闭 Wi-Fi 失败：{disabled.Error}", notify: true);
+            // Mark the adapter before starting netsh: cancellation can arrive after
+            // Windows applied the command but before the process result is observed.
+            adapterMayBeDisabled = true;
+            var disabled = await RunNetshAsync(
+                ["interface", "set", "interface", $"name={config.AdapterName}", "admin=disabled"], cancellationToken)
+                .ConfigureAwait(false);
+            if (!disabled.Success)
+            {
+                return RecoveryResult.Failed($"关闭 Wi-Fi 失败：{disabled.Error}", notify: true);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+
+            var enabled = await RunNetshAsync(
+                ["interface", "set", "interface", $"name={config.AdapterName}", "admin=enabled"], cancellationToken)
+                .ConfigureAwait(false);
+            if (!enabled.Success)
+            {
+                return RecoveryResult.Failed($"开启 Wi-Fi 失败：{enabled.Error}", notify: true);
+            }
+
+            adapterMayBeDisabled = false;
+            await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+
+            var connected = await RunNetshAsync(
+                ["wlan", "connect", $"name={config.TargetSsid}", $"interface={config.AdapterName}"], cancellationToken)
+                .ConfigureAwait(false);
+            if (!connected.Success)
+            {
+                return RecoveryResult.Failed(
+                    $"无法连接 {config.TargetSsid}。请先使用 Windows 手动连接一次该 Wi-Fi，并保存网络。", notify: true);
+            }
+
+            return RecoveryResult.Succeeded();
         }
-
-        await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
-
-        var enabled = await RunNetshAsync(
-            ["interface", "set", "interface", $"name={config.AdapterName}", "admin=enabled"], cancellationToken)
-            .ConfigureAwait(false);
-        if (!enabled.Success)
+        finally
         {
-            return RecoveryResult.Failed($"开启 Wi-Fi 失败：{enabled.Error}", notify: true);
+            if (adapterMayBeDisabled)
+            {
+                await EnsureAdapterEnabledAsync(config.AdapterName).ConfigureAwait(false);
+            }
         }
-
-        await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
-
-        var connected = await RunNetshAsync(
-            ["wlan", "connect", $"name={config.TargetSsid}", $"interface={config.AdapterName}"], cancellationToken)
-            .ConfigureAwait(false);
-        if (!connected.Success)
-        {
-            return RecoveryResult.Failed(
-                $"无法连接 {config.TargetSsid}。请先使用 Windows 手动连接一次该 Wi-Fi，并保存网络。", notify: true);
-        }
-
-        return RecoveryResult.Succeeded();
     }
 
     internal static bool IsAdministrator()
@@ -157,12 +172,47 @@ public sealed class WifiController
         }
         catch (OperationCanceledException)
         {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+                // The command may have exited between the cancellation and cleanup.
+            }
+
             throw;
         }
         catch (Exception ex)
         {
             AppLogger.Error($"netsh 执行异常：{commandText}", ex);
             return new CommandResult(false, string.Empty, ex.Message);
+        }
+    }
+
+    private static async Task EnsureAdapterEnabledAsync(string adapterName)
+    {
+        try
+        {
+            using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var cleanup = await RunNetshAsync(
+                ["interface", "set", "interface", $"name={adapterName}", "admin=enabled"], cleanupTimeout.Token)
+                .ConfigureAwait(false);
+            if (cleanup.Success)
+            {
+                AppLogger.Info($"恢复流程中断后的网卡启用兜底已完成：{adapterName}");
+            }
+            else
+            {
+                AppLogger.Error($"恢复流程中断后的网卡启用兜底失败：{cleanup.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("恢复流程中断后的网卡启用兜底发生异常", ex);
         }
     }
 

@@ -292,6 +292,16 @@ internal sealed class AuthorizationForm : Form
         {
             BeginInvoke(new Action(() =>
             {
+                if (status.Contains("已连接", StringComparison.Ordinal) ||
+                    status.Contains("会话已恢复", StringComparison.Ordinal) ||
+                    status.Contains("已退出", StringComparison.Ordinal) ||
+                    status.Contains("已失效", StringComparison.Ordinal) ||
+                    status.Contains("已撤销", StringComparison.Ordinal))
+                {
+                    RefreshState();
+                    return;
+                }
+
                 var (title, color) = status switch
                 {
                     var value when value.Contains("等待", StringComparison.Ordinal) => ("等待账号批准", Color.DarkOrange),

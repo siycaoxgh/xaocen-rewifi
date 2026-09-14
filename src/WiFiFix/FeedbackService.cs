@@ -47,7 +47,9 @@ internal static class DiagnosticReport
         var version = Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
         var builder = new StringBuilder();
         builder.AppendLine("XAOCEN ReWiFi 脱敏诊断信息");
-        builder.AppendLine($"应用版本：{version}");
+        builder.AppendLine($"对外版本：{AppLogger.Version}");
+        builder.AppendLine($"文件版本：{version}");
+        builder.AppendLine($"内部构建号：{AppLogger.BuildRevision}");
         builder.AppendLine($"Windows：{Environment.OSVersion.Version}");
         builder.AppendLine($"架构：{RuntimeInformation.ProcessArchitecture}");
         builder.AppendLine($"目标 Wi-Fi 已配置：{!string.IsNullOrWhiteSpace(config.TargetSsid)}");

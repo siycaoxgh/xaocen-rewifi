@@ -10,7 +10,9 @@ internal sealed class WindowsCredentialStore
     private const uint CredentialPersistLocalMachine = 2;
     private const int ErrorNotFound = 1168;
     private const string RefreshTokenTarget = "XAOCEN.ReWiFi/auth.xaocen.studio";
-    private const string OfflineDevicePrivateKeyTarget = "XAOCEN.ReWiFi/offline-device-key";
+    // Keep the historical target value so existing installations retain the same
+    // Account device identity after offline authorization was removed from v2.3.
+    private const string DeviceRegistrationPrivateKeyTarget = "XAOCEN.ReWiFi/offline-device-key";
 
     public void WriteRefreshToken(string refreshToken)
     {
@@ -22,19 +24,17 @@ internal sealed class WindowsCredentialStore
         WriteSecret(RefreshTokenTarget, refreshToken);
     }
 
-    public string? ReadOfflineDevicePrivateKey() => ReadSecret(OfflineDevicePrivateKeyTarget);
+    public string? ReadDeviceRegistrationPrivateKey() => ReadSecret(DeviceRegistrationPrivateKeyTarget);
 
-    public void WriteOfflineDevicePrivateKey(string privateKey)
+    public void WriteDeviceRegistrationPrivateKey(string privateKey)
     {
         if (string.IsNullOrWhiteSpace(privateKey))
         {
             throw new ArgumentException("设备私钥不能为空。", nameof(privateKey));
         }
 
-        WriteSecret(OfflineDevicePrivateKeyTarget, privateKey);
+        WriteSecret(DeviceRegistrationPrivateKeyTarget, privateKey);
     }
-
-    public void DeleteOfflineDevicePrivateKey() => DeleteSecret(OfflineDevicePrivateKeyTarget);
 
     private static void WriteSecret(string targetName, string secret)
     {
