@@ -14,7 +14,6 @@ public sealed class SettingsForm : Form
     private readonly AppConfig _initialConfig;
     private readonly WifiController _wifiController;
     private readonly AccountSessionManager _accountSessionManager;
-    private readonly OfflineAuthorizationManager _offlineAuthorizationManager;
     private readonly TelemetryClient _telemetry;
     private readonly Action<AppConfig> _saveAction;
     private readonly Label _accountSummary = CreateSummaryLabel();
@@ -28,27 +27,26 @@ public sealed class SettingsForm : Form
         AppConfig config,
         WifiController wifiController,
         AccountSessionManager accountSessionManager,
-        OfflineAuthorizationManager offlineAuthorizationManager,
         TelemetryClient telemetry,
         Action<AppConfig> saveAction)
     {
         _initialConfig = config.Clone();
         _wifiController = wifiController;
         _accountSessionManager = accountSessionManager;
-        _offlineAuthorizationManager = offlineAuthorizationManager;
         _telemetry = telemetry;
         _saveAction = saveAction;
         Text = $"{ProductInfo.ProductName} 设置";
         Font = new Font("Microsoft YaHei UI", 9F);
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Color.FromArgb(247, 249, 251);
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.Sizable;
         StartPosition = FormStartPosition.CenterScreen;
-        MaximizeBox = false;
+        MaximizeBox = true;
         MinimizeBox = true;
         ShowInTaskbar = true;
         Icon = LoadApplicationIcon();
-        ClientSize = new Size(1040, 840);
+        MinimumSize = new Size(720, 560);
+        ClientSize = new Size(1040, 900);
         _ssidTextBox.Text = _initialConfig.TargetSsid;
         _adapterTextBox.Text = _initialConfig.AdapterName;
 
@@ -60,17 +58,17 @@ public sealed class SettingsForm : Form
             RowCount = 6,
             AutoScroll = true
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 196));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 184));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 164));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 218));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         var overview = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = new Padding(0, 0, 0, 8) };
         overview.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
         overview.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        overview.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         overview.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         overview.Controls.Add(new PictureBox
         {
@@ -195,16 +193,15 @@ public sealed class SettingsForm : Form
         AcceptButton = saveButton;
         Shown += (_, _) =>
         {
+            ResponsiveWindow.FitToWorkingArea(this);
             _ssidTextBox.Focus();
             RefreshAuthorizationSummary();
         };
         _accountSessionManager.StatusChanged += AccountStateChanged;
-        _offlineAuthorizationManager.StateChanged += AuthorizationStateChanged;
         _telemetry.StatusChanged += TelemetryStateChanged;
         FormClosed += (_, _) =>
         {
             _accountSessionManager.StatusChanged -= AccountStateChanged;
-            _offlineAuthorizationManager.StateChanged -= AuthorizationStateChanged;
             _telemetry.StatusChanged -= TelemetryStateChanged;
         };
     }
@@ -223,31 +220,32 @@ public sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 1,
+            RowCount = 2,
             Margin = new Padding(0),
-            Padding = new Padding(0, 8, 0, 0)
+            Padding = new Padding(0, 4, 0, 0)
         };
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary), 0, 0);
-        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 0);
+        table.Controls.Add(CreateSummaryPanel("XAOCEN Account 会话", _accountSummary), 0, 1);
+        table.Controls.Add(CreateSummaryPanel("免费使用说明", _authorizationSummary), 1, 1);
 
         var centerButton = CreateSectionButton("打开账号中心", Color.FromArgb(255, 189, 74));
-        centerButton.AutoSize = false;
-        centerButton.Size = centerButton.GetPreferredSize(Size.Empty);
-        centerButton.Height = 30;
-        centerButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         centerButton.Click += (_, _) => OpenAuthorizationCenter();
-        group.Controls.Add(table);
-        group.Controls.Add(centerButton);
-        group.Resize += (_, _) =>
+        var accountActions = new FlowLayoutPanel
         {
-            centerButton.Left = Math.Max(180, group.ClientSize.Width - centerButton.Width - 12);
-            centerButton.Top = 6;
-            centerButton.BringToFront();
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
         };
+        accountActions.Controls.Add(centerButton);
+        table.Controls.Add(accountActions, 0, 0);
+        table.SetColumnSpan(accountActions, 2);
+        group.Controls.Add(table);
         return group;
     }
 
@@ -455,7 +453,7 @@ public sealed class SettingsForm : Form
 
     private void OpenAuthorizationCenter()
     {
-        using var form = new AuthorizationForm(_accountSessionManager, _offlineAuthorizationManager);
+        using var form = new AuthorizationForm(_accountSessionManager);
         form.ShowDialog(this);
         RefreshAuthorizationSummary();
     }
@@ -484,8 +482,6 @@ public sealed class SettingsForm : Form
     }
 
     private void AccountStateChanged(string _) => RefreshAuthorizationSummaryOnUiThread();
-
-    private void AuthorizationStateChanged() => RefreshAuthorizationSummaryOnUiThread();
 
     private void TelemetryStateChanged() => RefreshTelemetryStatusOnUiThread();
 

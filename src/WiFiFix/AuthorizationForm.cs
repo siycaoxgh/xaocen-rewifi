@@ -5,36 +5,30 @@ namespace XAOCEN.ReWiFi;
 internal sealed class AuthorizationForm : Form
 {
     private readonly AccountSessionManager _accountSessionManager;
-    private readonly OfflineAuthorizationManager _offlineAuthorizationManager;
     private readonly Label _accountStatus = CreateStatusLabel();
     private readonly Label _accountDetails = CreateDetailsLabel();
-    private readonly Label _offlineStatus = CreateStatusLabel();
-    private readonly Label _offlineDetails = CreateDetailsLabel();
-    private readonly TextBox _licenseTextBox = new();
     private readonly System.Windows.Forms.Timer _authorizationProgressTimer = new() { Interval = 1000 };
     private readonly CancellationTokenSource _closeCancellation = new();
     private CancellationTokenSource? _authorizationCancellation;
     private Button? _cancelAuthorizationButton;
     private DeviceAuthorizationProgress? _authorizationProgress;
 
-    public AuthorizationForm(
-        AccountSessionManager accountSessionManager,
-        OfflineAuthorizationManager offlineAuthorizationManager)
+    public AuthorizationForm(AccountSessionManager accountSessionManager)
     {
         _accountSessionManager = accountSessionManager;
-        _offlineAuthorizationManager = offlineAuthorizationManager;
 
         Text = "XAOCEN ReWiFi 账号中心";
         Font = new Font("Microsoft YaHei UI", 9F);
         AutoScaleMode = AutoScaleMode.Dpi;
         StartPosition = FormStartPosition.CenterScreen;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         MinimizeBox = false;
         ShowInTaskbar = false;
         Icon = LoadApplicationIcon();
         BackColor = Color.FromArgb(247, 249, 251);
-        ClientSize = new Size(1040, 840);
+        MinimumSize = new Size(720, 560);
+        ClientSize = new Size(1040, 900);
 
         var root = new TableLayoutPanel
         {
@@ -46,24 +40,25 @@ internal sealed class AuthorizationForm : Form
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         root.Controls.Add(CreateHeader(), 0, 0);
 
-        var columns = new TableLayoutPanel
+        var content = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
-            RowCount = 1,
+            ColumnCount = 1,
+            RowCount = 3,
             Margin = new Padding(0, 8, 0, 8),
-            Padding = new Padding(0)
+            Padding = new Padding(0),
+            AutoScroll = true
         };
-        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 10));
-        columns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        columns.Controls.Add(CreateOnlineGroup(), 0, 0);
-        columns.SetColumnSpan(columns.Controls[0], 3);
-        root.Controls.Add(columns, 0, 1);
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 280));
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 180));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        content.Controls.Add(CreateOnlineGroup(), 0, 0);
+        content.Controls.Add(CreateAccountGuidanceGroup(), 0, 1);
+        root.Controls.Add(content, 0, 1);
 
         var closeButton = new Button
         {
@@ -83,7 +78,11 @@ internal sealed class AuthorizationForm : Form
 
         Controls.Add(root);
         AcceptButton = closeButton;
-        Shown += (_, _) => RefreshState();
+        Shown += (_, _) =>
+        {
+            ResponsiveWindow.FitToWorkingArea(this);
+            RefreshState();
+        };
         _accountSessionManager.StatusChanged += AccountSessionStatusChanged;
         _accountSessionManager.AuthorizationProgressChanged += AccountAuthorizationProgressChanged;
         _authorizationProgressTimer.Tick += (_, _) =>
@@ -133,12 +132,11 @@ internal sealed class AuthorizationForm : Form
 
     private GroupBox CreateOnlineGroup()
     {
-        var group = CreateGroup("在线账号会话");
-        var table = CreateTable(2, 5);
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        var group = CreateGroup("XAOCEN Account 会话");
+        group.Margin = new Padding(0, 0, 0, 10);
+        var table = CreateTable(2, 3);
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 145));
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         table.Controls.Add(CreateFieldLabel("当前状态："), 0, 0);
         table.Controls.Add(_accountStatus, 1, 0);
@@ -151,17 +149,26 @@ internal sealed class AuthorizationForm : Form
         _cancelAuthorizationButton.Enabled = false;
         _cancelAuthorizationButton.Click += (_, _) => CancelAuthorization();
         var logoutButton = CreateButton("退出账号");
-        logoutButton.Click += async (_, _) => await EndAccountAsync(logoutButton, revoke: false);
-        var revokeButton = CreateButton("撤销此设备");
-        revokeButton.Click += async (_, _) => await EndAccountAsync(revokeButton, revoke: true);
-        var actions = CreateActions(authorizeButton, _cancelAuthorizationButton, logoutButton, revokeButton);
+        logoutButton.Click += async (_, _) => await LogoutAsync(logoutButton);
+        var actions = CreateActions(authorizeButton, _cancelAuthorizationButton, logoutButton);
         table.Controls.Add(actions, 0, 2);
         table.SetColumnSpan(actions, 2);
-
-        var note = CreateNoteLabel("浏览器只负责登录和批准设备；Account 页面会自动刷新并显示等待、已批准、已完成、拒绝或过期状态。授权完成后可以关闭浏览器，再返回本窗口查看“已连接”状态。\n\n如需切换浏览器中的账号，请先点击“取消登录”，再重新发起登录。登录用于账号识别；反馈网页可能仍需单独登录。统计偏好在设置中独立管理。", 4);
-        table.Controls.Add(note, 0, 3);
-        table.SetColumnSpan(note, 2);
         group.Controls.Add(table);
+        return group;
+    }
+
+    private GroupBox CreateAccountGuidanceGroup()
+    {
+        var group = CreateGroup("登录与设备说明");
+        group.Margin = new Padding(0, 0, 0, 10);
+        var note = CreateNoteLabel(
+            "浏览器只负责登录和批准设备；授权完成后可以关闭浏览器，再返回本窗口查看“已连接”状态。\n" +
+            "如需切换浏览器账号，请先点击“取消登录”，再重新发起登录。\n" +
+            "“退出账号”会结束本机当前账号会话并清除本地刷新凭据；其他设备请在 XAOCEN Account 网页中管理。\n" +
+            "登录用于账号识别；不登录也能使用全部网络恢复功能。统计偏好在设置中独立管理。",
+            6);
+        note.Padding = new Padding(4, 8, 4, 4);
+        group.Controls.Add(note);
         return group;
     }
 
@@ -235,20 +242,13 @@ internal sealed class AuthorizationForm : Form
         _authorizationCancellation.Cancel();
     }
 
-    private async Task EndAccountAsync(Button button, bool revoke)
+    private async Task LogoutAsync(Button button)
     {
         await RunButtonOperationAsync(button, "处理中……", async () =>
         {
             try
             {
-                if (revoke)
-                {
-                    await _accountSessionManager.RevokeAsync(_closeCancellation.Token);
-                }
-                else
-                {
-                    await _accountSessionManager.LogoutAsync(_closeCancellation.Token);
-                }
+                await _accountSessionManager.LogoutAsync(_closeCancellation.Token);
 
                 RefreshState();
             }
@@ -508,18 +508,4 @@ internal sealed class AuthorizationForm : Form
         _accountDetails.Text = details;
     }
 
-    private void SetOfflineStatus(string status, string details, Color color)
-    {
-        _offlineStatus.Text = status;
-        _offlineStatus.ForeColor = color;
-        _offlineDetails.Text = details;
-    }
-
-    private static string GetModeText(OfflineAuthorizationMode mode) => mode switch
-    {
-        OfflineAuthorizationMode.Online => "离线授权在线校验通过",
-        OfflineAuthorizationMode.Offline => "本地离线校验通过",
-        OfflineAuthorizationMode.Rejected => "授权被拒绝",
-        _ => "未配置离线授权"
-    };
 }

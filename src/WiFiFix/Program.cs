@@ -132,7 +132,7 @@ internal static class Program
         tray.AccountRequested += () =>
         {
             telemetry.MarkFeatureUsed("account.opened");
-            using var form = new AuthorizationForm(accountSessionManager, offlineAuthorizationManager);
+            using var form = new AuthorizationForm(accountSessionManager);
             form.ShowDialog();
         };
         tray.DocumentationRequested += () => _ = DocumentationRouter.OpenAsync();
@@ -228,7 +228,7 @@ internal static class Program
             }
 
             telemetry.MarkFeatureUsed("settings.opened");
-            settingsForm = new SettingsForm(config, controller, accountSessionManager, offlineAuthorizationManager, telemetry, updatedConfig =>
+            settingsForm = new SettingsForm(config, controller, accountSessionManager, telemetry, updatedConfig =>
             {
                 var startupApplied = startupManager.SetEnabled(updatedConfig.AutoStart);
                 updatedConfig.AutoStart = updatedConfig.AutoStart ? startupApplied : !startupApplied;
